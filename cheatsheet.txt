@@ -304,7 +304,7 @@ e905022f1c663740ee0000000900000000ffff000000000120000a3cd0a101003254cdab00000000
 
 # encoder stuff
 
-{"task":"/motor_act","motor":{"steppers":[{"stepperid":1,"encmonitor":0}]}}
+{"task":"/motor_act","motor":{"steppers":[{"stepperid":1,"encmonitor":1}]}}
 
 {"encoderMonitor":{"axis":1,"count":1234,"delta":56,"dtMs":502}}
 
