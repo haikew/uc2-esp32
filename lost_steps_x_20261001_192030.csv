@@ -1,0 +1,7 @@
+# test=lost_steps_x port=COM7 started=2026-10-01T19:20:32
+# home=0 far=100000 steps=100000 speeds=40000 accel=100000 cycles=2
+time_iso,speed,cycle,end,target,commanded,rawCounts
+2026-10-01T19:20:37.458,40000,1,far,100000,100000,16031
+2026-10-01T19:20:42.099,40000,1,home,0,0,0
+2026-10-01T19:20:46.750,40000,2,far,100000,100000,16030
+2026-10-01T19:20:51.362,40000,2,home,0,0,-1
