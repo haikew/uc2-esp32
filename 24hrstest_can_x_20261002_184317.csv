@@ -1,0 +1,10 @@
+# test=24hrstest_can_x port=COM6 node=11 started=2026-10-02T18:43:20
+# scale_pos=147808 sample_pos=-148202 interval=20 hours=0.0166667 speed=100000 accel=100000 mode=0 camera={'ExposureTime': 200000.0, 'Gain': 10.02}
+# scale_y=328052 sample_y=328022 y_node=12 y_speed=5000 y_accel=None
+# scale_z=41438 sample_z=43168 safe_z=None z_node=13 z_speed=5000 z_accel=None
+time_iso,speed,visit,place,move,target,commanded,rawCounts,measured,posErr,encDriftCounts,compSteps,residualCounts,offsetSteps,y,z,photo
+2026-10-02T18:43:26.163,100000,-1,sample,-2000,-148202,-148202,-47415,-143637,4565,0,0,0,0,328022,43168,
+2026-10-02T18:43:33.888,100000,0,scale,296010,147808,147808,-4,147784,-24,0,0,0,0,328052,41438,24hrstest_can_x_20261002_184317_photos\scale\0000_scale_20261002_184333.png
+2026-10-02T18:43:54.092,100000,1,sample,-296010,-148202,-148202,-47415,-143637,4571,0,0,0,0,328022,43168,24hrstest_can_x_20261002_184317_photos\sample\0001_sample_20261002_184354.png
+2026-10-02T18:44:13.976,100000,2,scale,296010,147808,147808,-2,147796,-18,2,0,2,0,328052,41438,24hrstest_can_x_20261002_184317_photos\scale\0002_scale_20261002_184413.png
+2026-10-02T18:44:34.048,100000,3,sample,-296010,-148202,-148202,-47415,-143631,4565,0,0,0,0,328022,43168,24hrstest_can_x_20261002_184317_photos\sample\0003_sample_20261002_184434.png

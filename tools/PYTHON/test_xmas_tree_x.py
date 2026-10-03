@@ -30,8 +30,9 @@ use pio device monitor to see the esp32 port
 Usage:
     uv install pyserial
     uv run tools/PYTHON/test_xmas_tree_x.py --port COM7
-    ## current maximum are 100000, acceleration 100000, max 200000
-    uv run tools/PYTHON/test_xmas_tree_x.py --port COM7 --speed 100000 --max 20000 --accel 1000000 --cycles 1 --mode 0
+    ## current maximum are 100000, acceleration 1000000, max 200000
+    uv run tools/PYTHON/test_xmas_tree_x.py --port COM7 --speed 100000 --max 2000 --accel 1000000 --cycles 1 --mode 0
+    uv run tools/PYTHON/test_xmas_tree_x.py --port COM7 --speed 100000 --max 200000 --accel 1000000 --cycles 10 --mode 0
     uv run tools/PYTHON/test_xmas_tree_x.py --port COM7 --max 20000 --cycles 5
 
 Output: the table is printed and also saved as CSV, one row per move end.
