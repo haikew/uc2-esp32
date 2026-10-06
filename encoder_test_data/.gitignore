@@ -1,0 +1,4 @@
+# Measurement data and pictures of tools/PYTHON/encoder_test stay local.
+# Only this file is tracked, so that the folder exists after a clone.
+*
+!.gitignore
