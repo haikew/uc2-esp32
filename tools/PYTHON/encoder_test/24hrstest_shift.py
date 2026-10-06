@@ -10,7 +10,7 @@ The test saves a photo at every visit, in <csv name>_photos/scale and
 <csv name>_photos/sample. For each of the two places the first photo is the
 reference and every later photo is compared with it: the shift is found by
 cross correlation of the two images (FFT, sub-pixel peak by a parabola fit),
-the same way as in xmas_tree_shift.ipynb. dx, dy = how far the image content
+the same way as in encoder_test.ipynb. dx, dy = how far the image content
 moved (positive = right / down in the photo).
 
 The pixel size comes from the tick period of the horizontal ruler in the

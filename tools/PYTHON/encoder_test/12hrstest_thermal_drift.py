@@ -57,6 +57,8 @@ Usage:
 
 Output: the table is printed and also saved as CSV, one row per sample.
 Lines starting with '#' are run metadata (pandas: read_csv(..., comment='#')).
+encoder_test.ipynb (part 6, DRIFT_RUN) correlates the photos and plots the
+drift against the encoder.
 """
 import argparse
 import csv

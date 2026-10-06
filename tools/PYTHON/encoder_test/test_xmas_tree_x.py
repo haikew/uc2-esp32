@@ -14,7 +14,8 @@ N times before the AFTER photo.
 
 Take a photo of the calibration slide before and after the run (the script
 waits for Enter at both points) and compare them with
-xmas_tree_shift.ipynb to get the accumulated open-loop error.
+encoder_test.ipynb (part 7: XMAS_RUN = the CSV of the run, the photos in
+<csv name>_photos) to get the accumulated open-loop error.
 
 Before the first photo the start position is approached from the same side
 as the final return move, so backlash is the same in both photos.

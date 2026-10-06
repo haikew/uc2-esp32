@@ -125,8 +125,8 @@ position is taken after the same leg.
 The photos are taken with the Hikrobot camera (needs the MVS SDK installed,
 and the MVS client must not have the camera open) and saved as
 <csv name>_photos/scale/0000_scale_<time>.png and .../sample/0001_sample_<time>.png,
-so xmas_tree_shift.ipynb can be pointed at the scale folder (the first photo
-is the reference). Exposure, gain etc. are used as they are set in the
+where 24hrstest_shift.py looks for them (the first photo of a place is its
+reference). Exposure, gain etc. are used as they are set in the
 camera unless --gain is given. --photo-test only takes one photo, to check
 the camera and the picture, and does not move the axis.
 A full-size png is about 30 MB, so 24 h need about 5 GB of disk space.
