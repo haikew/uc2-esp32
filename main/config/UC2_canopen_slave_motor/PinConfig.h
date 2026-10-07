@@ -120,10 +120,10 @@ struct UC2_canopen_slave_motor : PinConfig
      // Linear encoder pins (optional, for AS5311 interface)
      // For future encoder-based motion control
      // Currently disabled - can be enabled for testing PCNT vs interrupt performance
-     //int8_t ENC_X_A = GPIO_NUM_5; // GPIO_NUM_21; // Example: could use available GPIO pins
-     //int8_t ENC_X_B = GPIO_NUM_6; // GPIO_NUM_20;
-     int8_t ENC_X_A = GPIO_NUM_40; // GPIO_NUM_21; // Example: could use available GPIO pins
-     int8_t ENC_X_B = GPIO_NUM_41; // GPIO_NUM_20;
+     int8_t ENC_X_A = GPIO_NUM_5; // GPIO_NUM_21; // Example: could use available GPIO pins
+     int8_t ENC_X_B = GPIO_NUM_6; // GPIO_NUM_20;
+     // int8_t ENC_X_A = GPIO_NUM_40; // GPIO_NUM_21; // Example: could use available GPIO pins
+     // int8_t ENC_X_B = GPIO_NUM_41; // GPIO_NUM_20;
      
      /*
      GPIO_05: rotation_wh

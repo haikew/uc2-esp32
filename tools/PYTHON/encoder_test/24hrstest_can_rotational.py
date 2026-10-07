@@ -32,7 +32,7 @@ All moves are done in --mode 0 (open loop) by default: the firmware does
 not use the encoder, this script does the compensation with its own data.
 The raw encoder count at the first arrival at each place is the reference
 for that place. At every later arrival the count is compared with it
-(encDriftCounts). If it is more than --comp-counts (39) counts off, all X
+(encDriftCounts). If it is more than --comp-counts (5) counts off, all X
 targets are shifted by the missing steps (offsetSteps), the axis backs off
 --preload steps towards the place it came from and approaches again, so the
 backlash stays the same; this is repeated up to --comp-tries (3) times
@@ -71,9 +71,9 @@ compensate to. If the encoder did not see the steps of that leg, X goes back
 to where the leg started (that count is known) in checked chunks and the leg
 is driven once more; a second failure ends the run. After a run with
 lost-step events the firmware's step counter
-is off by offsetSteps. A run that starts at the scale lines zeroes the
-encoder there; at the end of the run, back at the scale lines, the firmware
-sets the step counter from the encoder again (at a few counts from its zero,
+is off by offsetSteps. An open-loop run zeroes the encoder at the scale
+lines before its first leg; at the end of the run, back at the scale lines,
+the firmware sets the step counter from the encoder again (a few counts from its zero,
 so the value of its calibration does not matter, but there must be one), and
 the script checks the counter afterwards. If that did not work or the run
 ended somewhere else (error, Ctrl+C), the offset, our steps per count and
@@ -94,13 +94,19 @@ below. In modes 2 and 3 the firmware adopts the encoder
 position as the new step counter after every move, so compare
 "measured"/"commanded" there, not rawCounts.
 
-Where the two places are: they are given as step positions, but the step
-counter is only right as long as no steps were lost outside a run (and the
-encoder is incremental: it starts at 0 after every power-up). The scale
-lines themselves are the reference. Before the first leg an open-loop run
-goes to the scale position (from the sample side, like every later
-arrival), takes a photo and compares it with the reference photo
---scale-ref (cross correlation, the code of 24hrstest_shift.py). The shift
+Where the two places are: they are given as step positions (SLIDE_XYZ and
+SAMPLE_XYZ, or the command line) and are used as they are. Nothing of an
+earlier run is used: the first photo of a place in this run is its
+reference (24hrstest_shift.py), the encoder count at the first arrival its
+encoder reference. Before the first leg an open-loop run goes to the scale
+position (from the sample side, like every later arrival) and zeroes the
+encoder there (the encoder is incremental: it starts at 0 after every
+power-up). The step counter is only right as long as no steps were lost
+outside a run: teach the two places again if that is in doubt.
+
+--scale-ref <photo> brings the scale lines to where they are in a photo of
+an earlier run instead: at the scale position a photo is taken and compared
+with it (cross correlation, the code of 24hrstest_shift.py). The shift
 in px is converted into motor steps (px -> um with the tick period of the
 ruler and --tick-um, um -> steps with --um-per-step; after the first
 correction the px per step that this correction really gave are used) and
@@ -112,7 +118,6 @@ encoder is zeroed at the aligned position. The photos are saved in
 lines are not in the picture (correlation below --align-corr) or if more
 than --align-max-um would be needed: then the counter is too far off, bring
 X to the scale lines by hand. Only X is corrected, dy is reported.
---no-align skips all this and trusts the step counter.
 
 Calibration: modes 1..3 only work with a valid encoder calibration in the
 firmware (sign, counts per step, backlash), otherwise "measured"/"posErr"
@@ -161,8 +166,8 @@ The photos are taken with the Hikrobot camera (needs the MVS SDK installed,
 and the MVS client must not have the camera open) and saved as
 <csv name>_photos/scale/0000_scale_<time>.png and .../sample/0001_sample_<time>.png,
 where 24hrstest_shift.py looks for them (the first photo of a place is its
-reference). Exposure, gain etc. are used as they are set in the
-camera unless --gain is given. --photo-test only takes one photo, to check
+reference). The gain is set to --gain (5 dB); the exposure etc. are used as
+they are set in the camera. --photo-test only takes one photo, to check
 the camera and the picture, and does not move the axis.
 A full-size png is about 30 MB, so 24 h need about 5 GB of disk space.
 
@@ -171,11 +176,11 @@ The PC is kept awake while the script runs. Stop early with Ctrl+C.
 Connect to the USB port of the CAN master.
 
 Usage:
-    uv run tools/PYTHON/encoder_test/24hrstest_can_rotational.py --photo-test --gain 23
+    uv run tools/PYTHON/encoder_test/24hrstest_can_rotational.py --photo-test
     uv run tools/PYTHON/encoder_test/24hrstest_can_rotational.py --port COM7 --status
-    uv run tools/PYTHON/encoder_test/24hrstest_can_rotational.py --port COM7 --speed 100000 --accel 100000 --gain 23 --quick
-    uv run tools/PYTHON/encoder_test/24hrstest_can_rotational.py --port COM7 --speed 100000 --accel 100000 --gain 23
-    uv run tools/PYTHON/encoder_test/24hrstest_can_rotational.py --port COM7 --gain 23 --scale-ref ref_scale.png
+    uv run tools/PYTHON/encoder_test/24hrstest_can_rotational.py --port COM7 --quick
+    uv run tools/PYTHON/encoder_test/24hrstest_can_rotational.py --port COM7
+    uv run tools/PYTHON/encoder_test/24hrstest_can_rotational.py --port COM7 --scale-ref ref_scale.png
 
 Output: the table is printed and also saved as CSV, one row per visit.
 Lines starting with '#' are run metadata (pandas: read_csv(..., comment='#')).
@@ -197,22 +202,16 @@ DATA_DIR = os.path.normpath(os.path.join(
 
 # ---- the two places: absolute step positions (x, y, z) ----------------------
 # Used when --scale-pos/-y/-z and --sample-pos/-y/-z are not given.
-# X re-taught on 2026-10-04: the step counter read -736092 with the stage at
-# the scale lines (checked by eye). The sample is the distance taught before
-# (-296010 steps = -148202 - 147808) away from them.
-SLIDE_XYZ = (-736092, 328052, 41438)    # scale lines of the calibration slide
-SAMPLE_XYZ = (-1032102, 328022, 43168)  # sample
+# Both places re-taught (x, y, z) on 2026-10-06. The sample is -296064 steps
+# in X away from the scale lines.
+SLIDE_XYZ = (-736122, 328450, 41712)    # scale lines of the calibration slide
+SAMPLE_XYZ = (-1032186, 327942, 43462)  # sample
 # None = Z is not retracted: X and Y move with Z still at the focus of the
 # place they leave, then Z goes to the new focus. X has been traversed by hand
 # at both focus heights without touching anything, so this is the default.
 # A number = Z goes there before X / Y move, and comes into focus afterwards.
 SAFE_Z = None
 # ------------------------------------------------------------------------------
-
-# reference photo of the scale lines for the alignment at the start: the first
-# scale photo of the run the two places were taught for (--scale-ref)
-SCALE_REF = os.path.join(DATA_DIR, "24hrstest_can_x_20261003_110333_photos",
-                         "scale", "0000_scale_20261003_110444.png")
 
 MODES = {0: "OPEN_LOOP", 1: "MONITOR", 2: "CORRECT", 3: "SERVO"}
 FAULTS = {0: "NONE", 1: "STALL", 2: "LOST_STEPS", 3: "DIVERGENCE", 4: "TIMEOUT",
@@ -550,10 +549,10 @@ def main():
     ap.add_argument("--compensate", action=argparse.BooleanOptionalAction, default=True,
                     help="mode 0: correct X ourselves when the encoder at a place is "
                          "off its first arrival there (--no-compensate: only record)")
-    ap.add_argument("--comp-counts", type=int, default=39,
+    ap.add_argument("--comp-counts", type=int, default=5,
                     help="compensate when the encoder is more than this many counts off "
-                         "(rotational encoder: 0.8 steps = 0.25 um per count, so 39 "
-                         "counts = 31 steps = 9.75 um, the 5 counts of the linear encoder)")
+                         "(rotational encoder: 0.8 steps = 0.25 um per count, so 5 "
+                         "counts = 4 steps = 1.25 um)")
     ap.add_argument("--preload", type=int, default=2000,
                     help="back-off distance for the re-approach after a correction")
     ap.add_argument("--comp-tries", type=int, default=3,
@@ -580,11 +579,11 @@ def main():
                          "the steps rise). Default: a run measures it on its first leg, "
                          f"--resync takes it from {UNSYNCED}. The firmware's calibration "
                          "is not used in --mode 0")
-    ap.add_argument("--align", action=argparse.BooleanOptionalAction, default=True,
-                    help="open-loop runs: before the first leg bring the scale lines to "
-                         "where they are in --scale-ref (photo, shift converted into steps)")
-    ap.add_argument("--scale-ref", default=SCALE_REF,
-                    help="reference photo of the scale lines for --align")
+    ap.add_argument("--scale-ref", default=None,
+                    help="open-loop runs: photo of the scale lines of an earlier run. Before "
+                         "the first leg the scale lines are brought to where they are in it "
+                         "(photo, shift converted into steps). Default: no photo is compared, "
+                         "the two places are used as they are given")
     ap.add_argument("--align-tol-um", type=float, default=3.0,
                     help="aligned when the picture is within this many um of the reference")
     ap.add_argument("--align-tries", type=int, default=6, help="corrections at most")
@@ -640,11 +639,11 @@ def main():
     ap.add_argument("--calibrate", action=argparse.BooleanOptionalAction, default=None,
                     help="run the firmware's encoder calibration first (default: "
                          "yes if --mode is 1..3, --no-calibrate to skip)")
-    ap.add_argument("--speed", type=int, default=10000)
+    ap.add_argument("--speed", type=int, default=100000)
     ap.add_argument("--accel", type=int, default=100000,
                     help="acceleration for all X moves")
-    ap.add_argument("--gain", type=float, default=None,
-                    help="camera gain in dB (default: as set in the camera)")
+    ap.add_argument("--gain", type=float, default=5.0,
+                    help="camera gain in dB")
     ap.add_argument("--exposure", type=float, default=None,
                     help="camera exposure time in microseconds (default: as set "
                          "in the camera)")
@@ -767,12 +766,12 @@ def main():
     visits = round(args.hours * 3600 / args.interval) + 1 if args.quick \
         else int(args.hours * 3600 / args.interval) + 1
 
-    args.align = args.align and args.mode == 0
+    args.align = args.scale_ref is not None and args.mode == 0
     scale_ref = um_per_px = None
     if args.align:  # before anything moves, like the camera
         if not os.path.exists(args.scale_ref):
-            raise SystemExit(f"reference photo of the scale lines not found: {args.scale_ref}. "
-                             f"Give one with --scale-ref, or --no-align to trust the step counter")
+            raise SystemExit(f"reference photo of the scale lines not found: {args.scale_ref} "
+                             f"(--scale-ref). Without --scale-ref no photo is compared")
         shift = load_shift()
         gray = shift.load_gray(args.scale_ref)
         px_per_tick = shift.tick_period(gray)
@@ -825,14 +824,6 @@ def main():
             if abs(pos - current) > args.limit:
                 raise SystemExit(f"{name} position {pos} is more than {args.limit} steps "
                                  f"away from the axis ({current}), see --limit")
-        if args.mode == 0 and not args.align and current == args.scale_pos                 and status["health"] != 2:
-            # at the scale lines: zero the encoder here (no motion). After lost
-            # steps the firmware can then set the step counter from the encoder
-            # at this count, where its calibration does not matter (0 counts)
-            axis.sdo(OD_RESET, 2, "u8")
-            time.sleep(1.0)
-            status = axis.status()
-            print(f"at the scale lines: encoder zeroed here (rawCounts = {status['rawCounts']})")
 
         def y_to(target):
             """Open-loop Y move (no encoder), returns the Y step position."""
@@ -1245,6 +1236,26 @@ def main():
             if args.align:
                 align()
                 current = args.scale_pos  # in the coordinates of the two places
+            elif args.mode == 0:
+                # no photo is compared: the two places are where they were given.
+                # To the scale position, if the axis is not there (over the
+                # approach point, so the backlash is that of a visit)
+                if current != args.scale_pos:
+                    if cur_mode[0] != 0:
+                        axis.set_mode(0)
+                        cur_mode[0] = 0
+                    slow = min(args.speed, args.recover_speed)
+                    approach = args.scale_pos + side["scale"] * args.preload
+                    x_to(approach, 0, approach - current, slow)
+                    x_to(args.scale_pos, 0, args.preload, slow)
+                    current = args.scale_pos
+                if axis.sdo(OD_HEALTH, typ="u8") != 2:
+                    # zero the encoder here (no motion): after lost steps the firmware can
+                    # set the step counter from the encoder at this count, where its
+                    # calibration does not matter (0 counts)
+                    axis.sdo(OD_RESET, 2, "u8")
+                    time.sleep(1.0)
+                    print(f"encoder zeroed at the scale lines (rawCounts = {axis.sdo(OD_RAW)})")
             prev = [current]
             # the sample must be reached from the scale side the first time too (its
             # encoder reference is taken there): if the axis starts close to it,
