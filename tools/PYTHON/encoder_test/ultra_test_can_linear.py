@@ -63,19 +63,19 @@ fault 0x2044, calibrated 0x2046, calibrate 0x2048, counts per step 0x2049,
 backlash 0x204A, raw counts 0x204B.
 --status only prints the axis status read over CAN and does not move.
 
-Two absolute positions are given: --scale-pos (the scale lines of the
-calibration slide) and --sample-pos (the sample). Every --interval seconds
+Two absolute positions are given: --slide-pos (the calibration slide) and
+--sample-pos (the sample). Every --interval seconds
 (10 min, with --quick 60) the axis moves to the other position and a
-photo is taken there, for --hours hours (24, with --quick 0.5): scale,
-sample, scale, sample, ... With the defaults that is 145 photos, 73 of the
-scale and 72 of the sample; with --quick 31.
+photo is taken there, for --hours hours (24, with --quick 0.5): calibration slide,
+sample, calibration slide, sample, ... With the defaults that is 145 photos, 73 of the
+calibration slide and 72 of the sample; with --quick 31.
 
 All moves are done open loop (--mode 0, the only mode of this test): the
 firmware does not use the encoder, this script does the compensation with
 its own data.
 The raw encoder count at the first arrival at each place is the reference
 for that place. At every later arrival the count is compared with it
-(encDriftCounts). If it is more than --comp-counts (3) counts off, all X
+(encDriftCounts). If it is more than --comp-counts (4) counts off, all X
 targets are shifted by the missing steps (offsetSteps), the axis backs off
 --preload steps towards the place it came from and approaches again, so the
 backlash stays the same; this is repeated up to --comp-tries (3) times
@@ -108,10 +108,10 @@ compensate to. If the encoder did not see the steps of that leg, X goes back
 to where the leg started (that count is known) in checked chunks and the leg
 is driven once more; a second failure ends the run. After a run with
 lost-step events the firmware's step counter
-is off by offsetSteps; at the end of the run, back at the scale lines, it is
+is off by offsetSteps; at the end of the run, back at the calibration slide, it is
 set from the encoder again. If a run ended somewhere else (error, Ctrl+C),
 the next run refuses to start (step counter and encoder disagree): --resync
-then brings X back to the scale lines by the encoder (raw count
+then brings X back to the calibration slide by the encoder (raw count
 --resync-raw, slowly, in checked chunks), sets the step counter from the
 encoder there and exits.
 The run only ends when the first arrival at a place (its reference) did not
@@ -141,16 +141,16 @@ that place, then the photo is taken. With a safe Z, Z is also retracted
 before the calibration sweep and always comes into focus from the safe
 position, so its backlash is the same at every photo. Without one, Z stays
 in focus while X and Y move. After the last visit the stage goes back to the
-scale lines (x, y, z in focus), see --no-return-to-scale; if the run ends
+calibration slide (x, y, z in focus), see --no-return-to-slide; if the run ends
 early (error, Ctrl+C) the axes stay where they are.
 
-Backlash: the scale position is always approached from the sample position
+Backlash: the calibration slide position is always approached from the sample position
 and the other way round, also the very first time, so every photo of one
 position is taken after the same leg.
 
 The photos are taken with the Hikrobot camera (needs the MVS SDK installed,
 and the MVS client must not have the camera open) and saved as
-<csv name>_photos/scale/0000_scale_<time>.png and .../sample/0001_sample_<time>.png,
+<csv name>_photos/calibration_slide/0000_calibration_slide_<time>.png and .../sample/0001_sample_<time>.png,
 where 24hrstest_shift.py looks for them (the first photo of a place is its
 reference). Exposure, gain etc. are used as they are set in the
 camera unless --gain is given. --photo-test only takes one photo, to check
@@ -162,6 +162,7 @@ The PC is kept awake while the script runs. Stop early with Ctrl+C.
 Connect to the USB port of the CAN master.
 
 Usage:
+    uv run tools/PYTHON/encoder_test/ultra_test_can_linear.py --seed 42 --port COM6
     uv run tools/PYTHON/encoder_test/ultra_test_can_linear.py --photo-test --gain 23
     uv run tools/PYTHON/encoder_test/ultra_test_can_linear.py --port COM7 --status
     uv run tools/PYTHON/encoder_test/ultra_test_can_linear.py --seed 42 --dry-run
@@ -189,11 +190,11 @@ DATA_DIR = os.path.normpath(os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "encoder_test_data"))
 
 # ---- the two places: absolute step positions (x, y, z) ----------------------
-# Used when --scale-pos/-y/-z and --sample-pos/-y/-z are not given.
+# Used when --slide-pos/-y/-z and --sample-pos/-y/-z are not given.
 # The places of the 24 h rotational run that ended on 2026-10-07
 # (24hrstest_can_rotational_x_20261006_135353), taught on 2026-10-06. The
-# sample is -296064 steps in X away from the scale lines.
-SLIDE_XYZ = (-736122, 328450, 41712)    # scale lines of the calibration slide
+# sample is -296064 steps in X away from the calibration slide.
+SLIDE_XYZ = (-736122, 328450, 41712)    # calibration slide
 SAMPLE_XYZ = (-1032186, 327942, 43462)  # sample
 # None = Z is not retracted: X and Y move with Z still at the focus of the
 # place they leave, then Z goes to the new focus. X has been traversed by hand
@@ -497,12 +498,12 @@ def main():
                     help="stepperid the master routes to that slave (X = 1)")
     ap.add_argument("--status", action="store_true",
                     help="only print the axis status read over CAN and exit")
-    ap.add_argument("--scale-pos", type=int, default=SLIDE_XYZ[0],
-                    help="absolute X position of the scale lines (steps)")
+    ap.add_argument("--slide-pos", type=int, default=SLIDE_XYZ[0],
+                    help="absolute X position of the calibration slide (steps)")
     ap.add_argument("--sample-pos", type=int, default=SAMPLE_XYZ[0],
                     help="absolute X position of the sample (steps)")
-    ap.add_argument("--scale-y", type=int, default=SLIDE_XYZ[1],
-                    help="Y position at the scale lines")
+    ap.add_argument("--slide-y", type=int, default=SLIDE_XYZ[1],
+                    help="Y position at the calibration slide")
     ap.add_argument("--sample-y", type=int, default=SAMPLE_XYZ[1],
                     help="Y position at the sample")
     ap.add_argument("--y-node", type=int, default=12, help="CAN node id of the Y slave")
@@ -513,8 +514,8 @@ def main():
     ap.add_argument("--y-speed", type=int, default=5000)
     ap.add_argument("--y-accel", type=int, default=None,
                     help="Y acceleration (default: not sent, firmware default)")
-    ap.add_argument("--scale-z", type=int, default=SLIDE_XYZ[2],
-                    help="focus (Z) position at the scale lines")
+    ap.add_argument("--slide-z", type=int, default=SLIDE_XYZ[2],
+                    help="focus (Z) position at the calibration slide")
     ap.add_argument("--sample-z", type=int, default=SAMPLE_XYZ[2],
                     help="focus (Z) position at the sample")
     ap.add_argument("--safe-z", type=int, default=SAFE_Z,
@@ -523,7 +524,7 @@ def main():
     ap.add_argument("--compensate", action=argparse.BooleanOptionalAction, default=True,
                     help="mode 0: correct X ourselves when the encoder at a place is "
                          "off its first arrival there (--no-compensate: only record)")
-    ap.add_argument("--comp-counts", type=int, default=3,
+    ap.add_argument("--comp-counts", type=int, default=4,
                     help="compensate when the encoder is more than this many counts off")
     ap.add_argument("--preload", type=int, default=2000,
                     help="back-off distance for the re-approach after a correction")
@@ -538,12 +539,12 @@ def main():
                     help="the recovery is driven in chunks of this many steps; the "
                          "run ends at the first chunk the encoder does not follow")
     ap.add_argument("--resync", action="store_true",
-                    help="after lost steps: bring X back to the scale lines by the "
+                    help="after lost steps: bring X back to the calibration slide by the "
                          "encoder (to the raw count --resync-raw, at --recover-speed in "
                          "checked chunks), set the step counter from the encoder there "
                          "and exit. Y and Z are not moved")
     ap.add_argument("--resync-raw", type=int, default=0,
-                    help="raw encoder count of the scale lines for --resync (0 if the "
+                    help="raw encoder count of the calibration slide for --resync (0 if the "
                          "encoder was last zeroed there, as --resync itself does)")
     ap.add_argument("--max-comp", type=int, default=None,
                     help="largest single correction in steps; beyond it the run ends "
@@ -570,8 +571,8 @@ def main():
                          "--quick 60)")
     ap.add_argument("--hours", type=float, default=None,
                     help="length of the test (default: 24, with --quick 0.5)")
-    ap.add_argument("--return-to-scale", action=argparse.BooleanOptionalAction, default=True,
-                    help="after the last visit go back to the scale lines (x, y, z), "
+    ap.add_argument("--return-to-slide", action=argparse.BooleanOptionalAction, default=True,
+                    help="after the last visit go back to the calibration slide (x, y, z), "
                          "if the test did not end there anyway")
     ap.add_argument("--quick", action=argparse.BooleanOptionalAction, default=False,
                     help="quick version: a visit every 60 s for half an hour "
@@ -663,9 +664,9 @@ def main():
                                  "(axismode 0) without a latched fault")
             k = 65536 / axis.sdo(OD_CPS_Q16)  # the firmware's steps per count, signed
             speed = min(args.speed, args.recover_speed)
-            # first to the approach point on the side the scale lines are always
+            # first to the approach point on the side the calibration slide is always
             # reached from, then onto the count; k is about 1.5 % off, so iterate
-            side = 1 if args.sample_pos > args.scale_pos else -1
+            side = 1 if args.sample_pos > args.slide_pos else -1
             for goal_raw, tol, past in ((args.resync_raw + side * args.preload / k, 200, 0),
                                         (args.resync_raw, abs(k), -side)):
                 problem = to_raw(axis, goal_raw, k, tol, speed, args.accel,
@@ -679,16 +680,16 @@ def main():
             time.sleep(1.0)
             st = axis.status()
             print(f"re-synced: {st}")
-            if abs(st["position"] - args.scale_pos) > 50:
-                print(f"WARNING: the step counter is {st['position']} here, the scale lines "
-                      f"are expected at {args.scale_pos} (--scale-pos)")
+            if abs(st["position"] - args.slide_pos) > 50:
+                print(f"WARNING: the step counter is {st['position']} here, the calibration slide "
+                      f"is expected at {args.slide_pos} (--slide-pos)")
         finally:
             ser.close()
         return
     if not args.port and not args.dry_run:
         ap.error("--port is required")
-    if args.scale_pos == args.sample_pos:
-        ap.error("--scale-pos and --sample-pos are the same")
+    if args.slide_pos == args.sample_pos:
+        ap.error("--slide-pos and --sample-pos are the same")
     if args.interval is None:
         args.interval = 60.0 if args.quick else 600.0
     if args.hours is None:
@@ -701,7 +702,7 @@ def main():
     if not 0 <= args.walk_min <= args.walk_max:
         ap.error("need 0 <= --walk-min <= --walk-max")
     # the random moves stay between the two places: outside them X hits something
-    lo, hi = sorted((args.scale_pos, args.sample_pos))
+    lo, hi = sorted((args.slide_pos, args.sample_pos))
     walk_lo, walk_hi = lo + args.walk_margin, hi - args.walk_margin
     if args.walk_margin < args.lost_steps:
         ap.error("--walk-margin must not be less than --lost-steps")
@@ -718,33 +719,33 @@ def main():
                 for _ in range(rng.randint(args.walk_min, args.walk_max))]
         assert all(lo < t < hi for t in plan)  # whatever the options were
         return plan
-    if args.safe_z is not None and min(args.scale_z, args.sample_z) < args.safe_z \
-            < max(args.scale_z, args.sample_z):
+    if args.safe_z is not None and min(args.slide_z, args.sample_z) < args.safe_z \
+            < max(args.slide_z, args.sample_z):
         ap.error("--safe-z lies between the two focus positions, so it is closer "
                  "than the focus of one of the places")
     if args.calibrate is None:
         args.calibrate = args.mode > 0
-    max_comp = args.max_comp or round(1.1 * abs(args.scale_pos - args.sample_pos))
+    max_comp = args.max_comp or round(1.1 * abs(args.slide_pos - args.sample_pos))
     out = args.out or os.path.join(DATA_DIR, f"ultra_test_can_linear_x_{datetime.now():%Y%m%d_%H%M%S}.csv")
     trace_path = os.path.splitext(out)[0] + "_lost_steps.csv"
     walk_path = os.path.splitext(out)[0] + "_walk.csv"
-    places = {"scale": args.scale_pos, "sample": args.sample_pos}
-    ys = {"scale": args.scale_y, "sample": args.sample_y}
-    focus = {"scale": args.scale_z, "sample": args.sample_z}
+    places = {"calibration slide": args.slide_pos, "sample": args.sample_pos}
+    ys = {"calibration slide": args.slide_y, "sample": args.sample_y}
+    focus = {"calibration slide": args.slide_z, "sample": args.sample_z}
     visits = round(args.hours * 3600 / args.interval) + 1 if args.quick \
         else int(args.hours * 3600 / args.interval) + 1
     if args.dry_run:
         print(f"seed = {args.seed}, random targets inside {walk_lo} .. {walk_hi} "
-              f"(scale = {args.scale_pos}, sample = {args.sample_pos})")
+              f"(calibration slide = {args.slide_pos}, sample = {args.sample_pos})")
         for visit in range(1, visits):
-            print(f"before visit {visit:>4} ({'scale' if visit % 2 == 0 else 'sample':>6}): "
+            print(f"before visit {visit:>4} ({'calibration slide' if visit % 2 == 0 else 'sample':>17}): "
                   + "  ".join(str(t) for t in walk_plan()))
         return
 
     camera = Camera(args.gain, args.exposure)  # before anything moves, so a camera problem shows up early
     photos = os.path.splitext(out)[0] + "_photos"
     for name in places:
-        os.makedirs(os.path.join(photos, name), exist_ok=True)
+        os.makedirs(os.path.join(photos, name.replace(" ", "_")), exist_ok=True)
     ser = open_master(args.port, args.baud)
     keep_awake(True)
     try:
@@ -754,7 +755,7 @@ def main():
         print(f"axis status (node {args.node}): {status}")
         current = status["position"]
 
-        print(f"current = {current}, scale = {args.scale_pos}, sample = {args.sample_pos}, "
+        print(f"current = {current}, calibration slide = {args.slide_pos}, sample = {args.sample_pos}, "
               f"{visits} visits every {args.interval:g} s ({args.hours:g} h), "
               f"speed = {args.speed}, accel = {args.accel or 'default'}, "
               f"mode = {args.mode} ({MODES[args.mode]})")
@@ -795,7 +796,7 @@ def main():
 
         yaxis = Axis(ser, args.y_node, args.y_sub, args.y_stepper)
         ypos = [yaxis.position()[0]]
-        print(f"Y (node {args.y_node}): current = {ypos[0]}, scale = {args.scale_y}, "
+        print(f"Y (node {args.y_node}): current = {ypos[0]}, calibration slide = {args.slide_y}, "
               f"sample = {args.sample_y}, speed = {args.y_speed}")
         for name, y in ys.items():
             if abs(y - ypos[0]) > args.limit:
@@ -804,7 +805,7 @@ def main():
 
         zaxis = Axis(ser, args.z_node, args.z_sub, args.z_stepper)
         zpos = [zaxis.position()[0]]
-        print(f"Z (node {args.z_node}): current = {zpos[0]}, scale = {args.scale_z}, "
+        print(f"Z (node {args.z_node}): current = {zpos[0]}, calibration slide = {args.slide_z}, "
               f"sample = {args.sample_z}, safe = {args.safe_z}, speed = {args.z_speed}")
         z_all = {**focus, **({} if args.safe_z is None else {"safe": args.safe_z})}
         for name, z in z_all.items():
@@ -841,12 +842,12 @@ def main():
         with open(out, "w", newline="") as f, open(walk_path, "w", newline="") as wf:
             f.write(f"# test=ultra_test_can_linear_x port={args.port} node={args.node} "
                     f"started={datetime.now().isoformat(timespec='seconds')}\n")
-            f.write(f"# scale_pos={args.scale_pos} sample_pos={args.sample_pos} "
+            f.write(f"# slide_pos={args.slide_pos} sample_pos={args.sample_pos} "
                     f"interval={args.interval:g} hours={args.hours:g} speed={args.speed} "
                     f"accel={args.accel} mode={args.mode} camera={camera.settings}\n")
-            f.write(f"# scale_y={args.scale_y} sample_y={args.sample_y} y_node={args.y_node} "
+            f.write(f"# slide_y={args.slide_y} sample_y={args.sample_y} y_node={args.y_node} "
                     f"y_speed={args.y_speed} y_accel={args.y_accel}\n")
-            f.write(f"# scale_z={args.scale_z} sample_z={args.sample_z} safe_z={args.safe_z} "
+            f.write(f"# slide_z={args.slide_z} sample_z={args.sample_z} safe_z={args.safe_z} "
                     f"z_node={args.z_node} z_speed={args.z_speed} z_accel={args.z_accel}\n")
             f.write(f"# compensate={args.compensate} comp_counts={args.comp_counts} "
                     f"comp_tries={args.comp_tries} preload={args.preload} "
@@ -885,15 +886,15 @@ def main():
             raw0 = {}      # place -> raw encoder count at the first arrival (the reference)
             offset = [0]   # steps added to every X target: the sum of our corrections
             # every place is reached coming from the other one
-            side = {"scale": 1 if args.sample_pos > args.scale_pos else -1,
-                    "sample": 1 if args.scale_pos > args.sample_pos else -1}
+            side = {"calibration slide": 1 if args.sample_pos > args.slide_pos else -1,
+                    "sample": 1 if args.slide_pos > args.sample_pos else -1}
             fw_steps_per_count = 65536 / (axis.sdo(OD_CPS_Q16) or 65536)  # signed
 
             def steps_per_count():
                 """Steps per encoder count from our own two references (the
                 travel between the two places), the firmware's value until then."""
-                if len(raw0) == 2 and raw0["scale"] != raw0["sample"]:
-                    return (args.scale_pos - args.sample_pos) / (raw0["scale"] - raw0["sample"])
+                if len(raw0) == 2 and raw0["calibration slide"] != raw0["sample"]:
+                    return (args.slide_pos - args.sample_pos) / (raw0["calibration slide"] - raw0["sample"])
                 return fw_steps_per_count
 
             def x_to(x, mode, distance, speed=None, trace=None, settle=None):
@@ -1108,14 +1109,15 @@ def main():
                 path = ""
                 if photo and not abort:
                     time.sleep(args.photo_delay)
-                    path = os.path.join(photos, place,
-                                        f"{visit:04d}_{place}_{now:%Y%m%d_%H%M%S}.{args.photo_format}")
+                    folder = place.replace(" ", "_")  # calibration slide -> calibration_slide
+                    path = os.path.join(photos, folder,
+                                        f"{visit:04d}_{folder}_{now:%Y%m%d_%H%M%S}.{args.photo_format}")
                     try:
                         camera.photo(path)
                     except RuntimeError as e:  # one missing photo should not end 24 h
                         print(f"    ! {e}")
                         path = f"FAILED: {e}"
-                print(f"{now:%m-%d %H:%M:%S} {visit:>5} {place:>7} {move:>8} {target:>10} "
+                print(f"{now:%m-%d %H:%M:%S} {visit:>5} {place:>17} {move:>8} {target:>10} "
                       f"{commanded:>10} {measured:>10} {pos_err:>7} {raw:>10} "
                       f"{enc_drift:>8} {comp:>6} {resid:>6} {ypos[0]:>8} {zpos[0]:>8}")
                 w.writerow([now.isoformat(timespec="milliseconds"), args.speed, visit, place,
@@ -1144,14 +1146,14 @@ def main():
                 encoder says where the stage is. A move that lost steps is the last
                 one: X waits where it stopped. Returns what go() needs."""
                 plan = walk_plan()
-                last = "sample" if place == "scale" else "scale"  # the place of the last photo
+                last = "sample" if place == "calibration slide" else "calibration slide"  # the place of the last photo
                 home = places[last]
                 wk = {"planned": len(plan), "done": 0, "travel": 0, "comp": 0, "lost": "",
                       "ev": None}
                 if args.safe_z is not None:  # retract, so nothing can touch while X moves
                     zpos[0] = z_to(args.safe_z)
                 k = steps_per_count()
-                raw_lo, raw_hi = sorted((raw0["scale"], raw0["sample"]))
+                raw_lo, raw_hi = sorted((raw0["calibration slide"], raw0["sample"]))
                 for i, t in enumerate(plan + [home], 1):
                     back = i > len(plan)  # the last move: back to the place of the last photo
                     name = "back" if back else f"{i}/{len(plan)}"
@@ -1172,7 +1174,7 @@ def main():
                     # its own reference): the counts and the steps the stage is away
                     # from the target
                     resid = raw - (raw0[last] if back
-                                   else round(raw0["scale"] + (t - args.scale_pos) / k))
+                                   else round(raw0["calibration slide"] + (t - args.slide_pos) / k))
                     err = round(resid * k)
                     lost = abs(err) > args.lost_steps
                     print(f"    walk {name}: {t - prev[0]:>+8} -> {t:>10}  counter "
@@ -1189,7 +1191,7 @@ def main():
                         raise SystemExit(
                             f"{what}: the encoder ({raw}) is more than "
                             f"{args.walk_stop_counts} counts outside the "
-                            f"two places (scale {raw0['scale']}, sample {raw0['sample']}). "
+                            f"two places (calibration slide {raw0['calibration slide']}, sample {raw0['sample']}). "
                             f"Nothing more is sent, X stays where it is; check where it is "
                             f"before the next run")
                     if lost and not args.compensate:
@@ -1231,13 +1233,13 @@ def main():
                             break
                 return wk
 
-            print(f"\n{'time':>14} {'visit':>5} {'place':>7} {'move':>8} {'target':>10} "
+            print(f"\n{'time':>14} {'visit':>5} {'place':>17} {'move':>8} {'target':>10} "
                   f"{'commanded':>10} {'measured':>10} {'posErr':>7} {'rawCounts':>10} {'encDrift':>8} {'comp':>6} {'resid':>6} {'y':>8} {'z':>8}")
             prev = [current]
             cur_mode = [status["axismode"]]
-            # the sample must be reached from the scale side the first time too (its
+            # the sample must be reached from the calibration slide side the first time too (its
             # encoder reference is taken there): if the axis starts close to it,
-            # back off towards the scale first
+            # back off towards the calibration slide first
             if (current - args.sample_pos) * side["sample"] < args.preload:
                 if cur_mode[0] != 0:
                     axis.set_mode(0)
@@ -1245,7 +1247,7 @@ def main():
                 back = args.sample_pos + side["sample"] * args.preload
                 x_to(back, 0, back - current)
                 prev[0] = current = back
-            # first to the sample, so the scale is approached from the sample the
+            # first to the sample, so the calibration slide is approached from the sample the
             # very first time too. This leg is open loop and is the scale check:
             # the encoder must see (about) as many steps as were commanded
             first = args.sample_pos - current
@@ -1266,7 +1268,7 @@ def main():
 
             t0 = time.time()
             for visit in range(visits):
-                place = "scale" if visit % 2 == 0 else "sample"
+                place = "calibration slide" if visit % 2 == 0 else "sample"
                 # fixed schedule from t0, so the move and photo times do not add up
                 due = t0 + visit * args.interval
                 # until then: the random moves, then X waits at the place of the last photo
@@ -1274,16 +1276,16 @@ def main():
                 while time.time() < due:
                     time.sleep(min(1.0, max(0.0, due - time.time())))
                 go(visit, place, wk=wk)
-            if args.return_to_scale and (visits - 1) % 2:
+            if args.return_to_slide and (visits - 1) % 2:
                 # the last visit was the sample: end where the test started,
-                # at the scale lines (no photo, logged as one more row)
-                go(visits, "scale", photo=False, into_focus=True)
+                # at the calibration slide (no photo, logged as one more row)
+                go(visits, "calibration slide", photo=False, into_focus=True)
             print(f"\ndone, {visits} visits, {lost_events[0]} lost-step events"
                   + (f" (samples in {trace_path})" if lost_events[0] else ""))
             if lost_events[0]:
                 # the firmware's step counter is off by what was compensated
-                if prev[0] == args.scale_pos and abs(raw0["scale"]) <= 50:
-                    axis.sdo(OD_RESET, 1, "u8")  # at the scale lines: counter := encoder
+                if prev[0] == args.slide_pos and abs(raw0["calibration slide"]) <= 50:
+                    axis.sdo(OD_RESET, 1, "u8")  # at the calibration slide: counter := encoder
                     time.sleep(1.0)
                     print(f"step counter (it was {offset[0]:+d} steps off) set from the encoder: "
                           f"{axis.sdo(OD_POSITION)}")

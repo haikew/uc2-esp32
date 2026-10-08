@@ -3,11 +3,11 @@
 X-axis 24 hour test: go back and forth between two positions and take a
 photo at each visit.
 
-Two absolute positions are given: --scale-pos (the scale lines of the
-calibration slide) and --sample-pos (the sample). Every --interval seconds
+Two absolute positions are given: --slide-pos (the calibration slide) and
+--sample-pos (the sample). Every --interval seconds
 (default 10 min) the axis moves to the other position and a photo is taken
-there, for --hours hours (default 24): scale, sample, scale, sample, ...
-With the defaults that is 145 photos, 73 of the scale and 72 of the sample.
+there, for --hours hours (default 24): calibration slide, sample, calibration slide, sample, ...
+With the defaults that is 145 photos, 73 of the calibration slide and 72 of the sample.
 
 All moves are done in --mode 2 (CORRECT) by default (0 = open loop,
 1 = monitor, 3 = servo). In modes 2 and 3 the firmware adopts the encoder
@@ -24,15 +24,15 @@ After that the first leg (to the sample position) is run open loop as a
 scale check: if the encoder does not see about as many steps as were
 commanded, a closed-loop run is aborted.
 
-Backlash: the scale position is always approached from the sample position
+Backlash: the calibration slide position is always approached from the sample position
 and the other way round, also the very first time, so every photo of one
 position is taken after the same leg.
 
 The photos are taken with the Hikrobot camera (needs the MVS SDK installed,
 and the MVS client must not have the camera open) and saved as
-<csv name>_photos/scale/0000_scale_<time>.png and .../sample/0001_sample_<time>.png,
+<csv name>_photos/calibration_slide/0000_calibration_slide_<time>.png and .../sample/0001_sample_<time>.png,
 the first photo of a place is the reference for the later ones (how two
-photos are compared: part 5 of encoder_test.ipynb). Exposure, gain etc. are used as they are set in the
+photos are compared: part 6 of encoder_test.ipynb). Exposure, gain etc. are used as they are set in the
 camera unless --gain is given. --photo-test only takes one photo, to check
 the camera and the picture, and does not move the axis.
 A full-size png is about 30 MB, so 24 h need about 5 GB of disk space.
@@ -43,8 +43,8 @@ Connect to the USB port of the node where the X axis + encoder are LOCAL.
 
 Usage:
     uv run tools/PYTHON/encoder_test/24hrstest.py --photo-test --gain 23
-    uv run tools/PYTHON/encoder_test/24hrstest.py --port COM7 --scale-pos 51793 --sample-pos 91793 --speed 100000 --accel 1000000 --gain 23
-    uv run tools/PYTHON/encoder_test/24hrstest.py --port COM7 --scale-pos 51793 --sample-pos 91793 --interval 60 --hours 0.1
+    uv run tools/PYTHON/encoder_test/24hrstest.py --port COM7 --slide-pos 51793 --sample-pos 91793 --speed 100000 --accel 1000000 --gain 23
+    uv run tools/PYTHON/encoder_test/24hrstest.py --port COM7 --slide-pos 51793 --sample-pos 91793 --interval 60 --hours 0.1
 
 Output: the table is printed and also saved as CSV, one row per visit.
 Lines starting with '#' are run metadata (pandas: read_csv(..., comment='#')).
@@ -289,8 +289,8 @@ def keep_awake(on):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--port", default=None)
-    ap.add_argument("--scale-pos", type=int, default=None,
-                    help="absolute position of the scale lines (steps)")
+    ap.add_argument("--slide-pos", type=int, default=None,
+                    help="absolute position of the calibration slide (steps)")
     ap.add_argument("--sample-pos", type=int, default=None,
                     help="absolute position of the sample (steps)")
     ap.add_argument("--interval", type=float, default=600,
@@ -326,22 +326,22 @@ def main():
         finally:
             camera.close()
         return
-    if not args.port or args.scale_pos is None or args.sample_pos is None:
-        ap.error("--port, --scale-pos and --sample-pos are required")
-    if args.scale_pos == args.sample_pos:
-        ap.error("--scale-pos and --sample-pos are the same")
+    if not args.port or args.slide_pos is None or args.sample_pos is None:
+        ap.error("--port, --slide-pos and --sample-pos are required")
+    if args.slide_pos == args.sample_pos:
+        ap.error("--slide-pos and --sample-pos are the same")
     if args.interval <= 0 or args.hours <= 0:
         ap.error("--interval and --hours must be > 0")
     if args.calibrate is None:
         args.calibrate = args.mode > 0
     out = args.out or os.path.join(DATA_DIR, f"24hrstest_x_{datetime.now():%Y%m%d_%H%M%S}.csv")
-    places = {"scale": args.scale_pos, "sample": args.sample_pos}
+    places = {"calibration slide": args.slide_pos, "sample": args.sample_pos}
     visits = int(args.hours * 3600 / args.interval) + 1
 
     camera = Camera(args.gain)  # before anything moves, so a camera problem shows up early
     photos = os.path.splitext(out)[0] + "_photos"
     for name in places:
-        os.makedirs(os.path.join(photos, name), exist_ok=True)
+        os.makedirs(os.path.join(photos, name.replace(" ", "_")), exist_ok=True)
     ser = serial.Serial(args.port, 115200, timeout=0.2)
     keep_awake(True)
     try:
@@ -356,7 +356,7 @@ def main():
                 raise
             current = status["position"]
 
-        print(f"current = {current}, scale = {args.scale_pos}, sample = {args.sample_pos}, "
+        print(f"current = {current}, calibration slide = {args.slide_pos}, sample = {args.sample_pos}, "
               f"{visits} visits every {args.interval:g} s ({args.hours:g} h), "
               f"speed = {args.speed}, accel = {args.accel or 'default'}, "
               f"mode = {args.mode} ({MODES[args.mode]})")
@@ -394,7 +394,7 @@ def main():
         with open(out, "w", newline="") as f:
             f.write(f"# test=24hrstest_x port={args.port} "
                     f"started={datetime.now().isoformat(timespec='seconds')}\n")
-            f.write(f"# scale_pos={args.scale_pos} sample_pos={args.sample_pos} "
+            f.write(f"# slide_pos={args.slide_pos} sample_pos={args.sample_pos} "
                     f"interval={args.interval:g} hours={args.hours:g} speed={args.speed} "
                     f"accel={args.accel} mode={args.mode} gain={args.gain}\n")
             if cal:
@@ -416,24 +416,25 @@ def main():
                 path = ""
                 if photo:
                     time.sleep(args.photo_delay)
-                    path = os.path.join(photos, place,
-                                        f"{visit:04d}_{place}_{now:%Y%m%d_%H%M%S}.{args.photo_format}")
+                    folder = place.replace(" ", "_")  # calibration slide -> calibration_slide
+                    path = os.path.join(photos, folder,
+                                        f"{visit:04d}_{folder}_{now:%Y%m%d_%H%M%S}.{args.photo_format}")
                     try:
                         camera.photo(path)
                     except RuntimeError as e:  # one missing photo should not end 24 h
                         print(f"    ! {e}")
                         path = f"FAILED: {e}"
-                print(f"{now:%m-%d %H:%M:%S} {visit:>5} {place:>7} {move:>8} {target:>10} "
+                print(f"{now:%m-%d %H:%M:%S} {visit:>5} {place:>17} {move:>8} {target:>10} "
                       f"{commanded:>10} {measured:>10} {pos_err:>7} {raw:>10}")
                 w.writerow([now.isoformat(timespec="milliseconds"), args.speed, visit, place,
                             move, target, commanded, raw, measured, pos_err, path])
                 f.flush()
                 return pos_err
 
-            print(f"\n{'time':>14} {'visit':>5} {'place':>7} {'move':>8} {'target':>10} "
+            print(f"\n{'time':>14} {'visit':>5} {'place':>17} {'move':>8} {'target':>10} "
                   f"{'commanded':>10} {'measured':>10} {'posErr':>7} {'rawCounts':>10}")
             prev = [current]
-            # first to the sample, so the scale is approached from the sample the
+            # first to the sample, so the calibration slide is approached from the sample the
             # very first time too. This leg is open loop and is the scale check:
             # the encoder must see (about) as many steps as were commanded
             first = args.sample_pos - current
@@ -453,7 +454,7 @@ def main():
                 # fixed schedule from t0, so the move and photo times do not add up
                 while time.time() < t0 + visit * args.interval:
                     time.sleep(min(1.0, max(0.0, t0 + visit * args.interval - time.time())))
-                go(visit, "scale" if visit % 2 == 0 else "sample")
+                go(visit, "calibration slide" if visit % 2 == 0 else "sample")
             print(f"\ndone, {visits} visits")
     except KeyboardInterrupt:
         print("\nstopped by Ctrl+C")

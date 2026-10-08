@@ -13,9 +13,10 @@ With --cycles N the whole tree (including the return to start) is repeated
 N times before the AFTER photo.
 
 Take a photo of the calibration slide before and after the run (the script
-waits for Enter at both points) and compare them with
-encoder_test.ipynb (part 7: XMAS_RUN = the CSV of the run, the photos in
-<csv name>_photos) to get the accumulated open-loop error.
+waits for Enter at both points) and compare them by cross correlation, as
+part 6.5 of encoder_test.ipynb does for two photos, to get the accumulated
+open-loop error (the xmas tree part of that notebook was taken out on
+2026-10-08: it is part 7 of encoder_test.ipynb in commit be53de2).
 
 Before the first photo the start position is approached from the same side
 as the final return move, so backlash is the same in both photos.

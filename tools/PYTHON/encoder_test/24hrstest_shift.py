@@ -6,7 +6,7 @@
 """
 Optical check of a 24hrstest_can_*.py run: how far did the picture move?
 
-The test saves a photo at every visit, in <csv name>_photos/scale and
+The test saves a photo at every visit, in <csv name>_photos/calibration_slide and
 <csv name>_photos/sample. For each of the two places the first photo is the
 reference and every later photo is compared with it: the shift is found by
 cross correlation of the two images (FFT, sub-pixel peak by a parabola fit),
@@ -14,16 +14,16 @@ the same way as in encoder_test.ipynb. dx, dy = how far the image content
 moved (positive = right / down in the photo).
 
 The pixel size comes from the tick period of the horizontal ruler in the
-first scale photo (--tick-um is the distance between two small ticks, CHECK
+first calibration slide photo (--tick-um is the distance between two small ticks, CHECK
 YOUR SLIDE); --px-per-tick sets the period by hand if the automatic one is
-wrong. A shift close to a multiple of the tick period in a scale photo may
+wrong. A shift close to a multiple of the tick period in a calibration slide photo may
 be a wrong correlation peak.
 
 The shifts are joined with the rows of the run (encoder residual, lost-step
 events). The visits at which lost steps were compensated are marked: in the
 table (event column), in the CSV and in the plots (red lines, labelled with
 the visit and the compensated steps; the photo of that visit is taken right
-after the recovery, the next scale photo is the first return after it).
+after the recovery, the next calibration slide photo is the first return after it).
 The summary also compares every photo with the photo before and the photo
 after it at the same place: that leaves out the slow drift, so it shows
 whether a recovery lands somewhere else than a normal visit does.
@@ -62,7 +62,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from PIL import Image
 
-PLACES = ("scale", "sample")
+PLACES = ("calibration slide", "sample")
 IMAGE_EXT = (".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp")
 # AS5311: one pole pair of the magnetic strip is 2 mm = 1024 counts
 UM_PER_COUNT = 2000 / 1024
@@ -84,7 +84,7 @@ def tick_period(im, min_lag=5):
     peaks = [i for i in range(min_lag, ac.size - 1)
              if ac[i] > ac[i - 1] and ac[i] >= ac[i + 1] and ac[i] > 0.3]
     if not peaks:
-        raise SystemExit("no ruler ticks found in the first scale photo, set --px-per-tick")
+        raise SystemExit("no ruler ticks found in the first calibration slide photo, set --px-per-tick")
     # the peaks at 2, 3, ... periods give the period more exactly: follow them
     # as long as the next one is where it should be
     n, i = 1, peaks[0]
@@ -152,11 +152,11 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("csv", help="CSV file of the 24hrstest_can_*.py run")
     ap.add_argument("--photos", default=None,
-                    help="folder with scale/ and sample/ (default: <csv name>_photos)")
+                    help="folder with calibration_slide/ and sample/ (default: <csv name>_photos)")
     ap.add_argument("--tick-um", type=float, default=10.0,
                     help="distance between two small ruler ticks in um")
     ap.add_argument("--px-per-tick", type=float, default=None,
-                    help="tick period in px (default: measured in the first scale photo)")
+                    help="tick period in px (default: measured in the first calibration slide photo)")
     ap.add_argument("--highpass", type=float, default=100,
                     help="structures larger than this many px are ignored")
     ap.add_argument("--um-per-count", type=float, default=UM_PER_COUNT,
@@ -182,7 +182,7 @@ def main():
         run. Prints the table, writes the CSV, returns (rows, um per px)."""
         files = {}
         for place in PLACES:
-            folder = os.path.join(photos, place)
+            folder = os.path.join(photos, place.replace(" ", "_"))
             if not os.path.isdir(folder):
                 raise SystemExit(f"no photos in {folder}")
             # file names start with the visit: 0019_sample_<time>.png
@@ -192,7 +192,7 @@ def main():
                 raise SystemExit(f"need at least 2 photos in {folder}")
 
         refs = {place: load_gray(files[place][0][1]) for place in PLACES}
-        period = tick_period(refs["scale"])
+        period = tick_period(refs["calibration slide"])
         px_per_tick = args.px_per_tick or period
         um_per_px = args.tick_um / px_per_tick
         print(f"tick period = {period:.2f} px (used: {px_per_tick:.2f}), one tick = "
@@ -201,7 +201,7 @@ def main():
             print(f"{place}: {len(files[place])} photos, reference = "
                   f"{os.path.basename(files[place][0][1])}")
         print()
-        print(f"{'time':>14} {'visit':>5} {'place':>7} {'dx [px]':>8} {'dy [px]':>8} "
+        print(f"{'time':>14} {'visit':>5} {'place':>17} {'dx [px]':>8} {'dy [px]':>8} "
               f"{'dx [um]':>8} {'dy [um]':>8} {'corr':>5} {'resid':>5}  event")
 
         refs = {place: Reference(ref, args.highpass) for place, ref in refs.items()}
@@ -218,7 +218,7 @@ def main():
                     continue
                 dx, dy, corr = refs[place].shift(load_gray(path))
                 t = datetime.fromisoformat(row["time_iso"])
-                # the scale photo after an event is the first return after the recovery
+                # the calibration slide photo after an event is the first return after the recovery
                 after = visit - 1 if visit - 1 in events else ""
                 r = dict(visit=visit, place=place, hours=(t - t_start).total_seconds() / 3600,
                          dx=dx * um_per_px, dy=dy * um_per_px, corr=corr,
@@ -227,7 +227,7 @@ def main():
                 result.append(r)
                 note = (f"{row['event']}, {num(row['compSteps']):+.0f} steps compensated"
                         if r["event"] else f"first return after visit {after}" if r["after"] else "")
-                print(f"{t:%m-%d %H:%M:%S} {visit:>5} {place:>7} {dx:>8.2f} {dy:>8.2f} "
+                print(f"{t:%m-%d %H:%M:%S} {visit:>5} {place:>17} {dx:>8.2f} {dy:>8.2f} "
                       f"{r['dx']:>8.2f} {r['dy']:>8.2f} {corr:>5.2f} {row['residualCounts']:>5}  "
                       f"{note}")
                 w.writerow([row["time_iso"], round(r["hours"], 4), visit, place, round(dx, 3),

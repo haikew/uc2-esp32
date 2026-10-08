@@ -22,9 +22,10 @@ and over the same distance (--preload) before the BEFORE photo and before
 the AFTER photo, so backlash is the same in both photos.
 
 Take a photo of the calibration slide before and after the run (the script
-waits for Enter before the run) and compare them with
-encoder_test.ipynb (part 7: XMAS_RUN = the CSV of the run, the photos in
-<csv name>_photos) to get the accumulated open-loop error.
+waits for Enter before the run) and compare them by cross correlation, as
+part 6.5 of encoder_test.ipynb does for two photos, to get the accumulated
+open-loop error (the xmas tree part of that notebook was taken out on
+2026-10-08: it is part 7 of encoder_test.ipynb in commit be53de2).
 
 Calibration: modes 1..3 only work with a valid encoder calibration in the
 firmware (sign, counts per step, backlash), otherwise "measured"/"posErr"

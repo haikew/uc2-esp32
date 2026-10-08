@@ -4,10 +4,10 @@
 # dependencies = ["pyserial>=3.5", "numpy>=2", "pillow", "matplotlib"]
 # ///
 """
-X-axis backlash, measured optically: photos of the scale lines after an
+X-axis backlash, measured optically: photos of the calibration slide after an
 approach from below and after an approach from above.
 
-Before the start bring the scale lines of the calibration slide into the
+Before the start bring the calibration slide into the
 picture and into focus: where X is then is position 0. Y and Z are not moved.
 
   1. a photo at position 0: the tick period of the ruler in it gives the
@@ -35,7 +35,7 @@ The moves are open loop (axis mode 0; the firmware's CORRECT mode would add
 its own backlash feed-forward). The raw encoder count is only recorded, and
 used as a guard: the run ends when an arrival is more than --max-counts
 counts away from the first arrival from the same side (lost steps), or when
-the scale lines are no longer in the picture (--min-corr). X stays where it
+the calibration slide is no longer in the picture (--min-corr). X stays where it
 is then.
 
 With --accel 100000 the axis only reaches 100000 steps/s after 50000 steps,
@@ -109,7 +109,7 @@ def main():
                     help="stage travel per motor step, to give the backlash in steps too")
     ap.add_argument("--min-corr", type=float, default=0.5,
                     help="lowest correlation with the reference that still counts as "
-                         "'the scale lines are in the picture' (same picture = 1)")
+                         "'the calibration slide is in the picture' (same picture = 1)")
     ap.add_argument("--max-counts", type=int, default=50,
                     help="the run ends when the encoder at an arrival is more than this "
                          "many counts off the first arrival from the same side")
@@ -152,7 +152,7 @@ def main():
         peak = min(args.speed, int((args.accel * D) ** 0.5))
         print(f"position 0 = {p0}, position 1 = {p1}, {args.rounds} rounds")
         print(f"X will travel between {p1 - D} and {p1 + D} steps "
-              f"(+- {D * args.um_per_step / 1000:.2f} mm around the scale lines), "
+              f"(+- {D * args.um_per_step / 1000:.2f} mm around the calibration slide), "
               f"peak speed of an approach = {peak} steps/s"
               + ("" if peak >= args.speed else f" (--speed {args.speed} needs --approach "
                                                f">= {args.speed ** 2 // args.accel})"))
@@ -218,8 +218,8 @@ def main():
                           f"{corr:>5.2f} {raw:>8}"
                           + (f"  {x - seen['below'][-1][0]:+.2f}" if side == "above" else ""))
                     if corr < args.min_corr:
-                        raise SystemExit(f"correlation {corr:.2f} < {args.min_corr}: the scale "
-                                         f"lines are not in the picture as in the reference "
+                        raise SystemExit(f"correlation {corr:.2f} < {args.min_corr}: the calibration slide "
+                                         f"is not in the picture as in the reference "
                                          f"(lost steps?). X stays where it is")
                     if abs(raw - seen[side][0][2]) > args.max_counts:
                         raise SystemExit(f"encoder at {raw}, {seen[side][0][2]} at the first "
