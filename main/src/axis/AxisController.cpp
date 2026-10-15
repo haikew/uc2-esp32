@@ -105,7 +105,7 @@ namespace AxisController
     // Correction bounds (design v2, WP6).
     // 50000, not 5000: a stall left far more than 5000 steps missing.
     static constexpr int32_t kMaxCorrectionSteps = 50000; // clamp per corrective move
-    static constexpr uint8_t kMaxCorrectionRetries = 6;
+    static constexpr uint8_t kMaxCorrectionRetries = 2;
     static constexpr int32_t kCorrectionSpeed = 10000;    // steps/s for corrections
 
     static AxisState g_axes[MOTOR_AXIS_COUNT];
