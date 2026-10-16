@@ -45,7 +45,6 @@ namespace AxisCalibrationRoutine
     {
         int32_t  probeSpeed        = 5000;  // steps/s, keeps the longer sweep short
         uint8_t  sweepSegments     = 10;    // samples per direction
-
         int32_t  segmentSteps      = 5000;  // steps between samples
         int32_t  minCountsForValidity = 4;  // sweep must move at least this many counts
         float    minR2             = 0.98f; // regression quality gate (per leg)

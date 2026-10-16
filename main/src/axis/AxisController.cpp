@@ -178,12 +178,7 @@ namespace AxisController
         if (a.cal.valid)
         {
             int32_t scatterSteps = abs(axisCountsToSteps(a.cal, (int64_t)scatter * 8));
-            // Backlash: the calibrated value (hysteresis loop width) OR the
-            // optically measured one from the pin config, whichever is larger.
-            // A motor-shaft encoder sits before the slack and calibrates ~0.
-            int32_t calBacklash = abs(axisCountsToSteps(a.cal, a.cal.backlashCounts));
-            a.backlashSteps = (pinConfig.axis_backlash_steps > calBacklash)
-                                  ? (int32_t)pinConfig.axis_backlash_steps : calBacklash;
+            a.backlashSteps = abs(axisCountsToSteps(a.cal, a.cal.backlashCounts));
             c.lagLimitSteps = scatterSteps + a.backlashSteps + 20;
 
             // Verify tolerance (CORRECT) and divergence threshold (MONITOR) also
