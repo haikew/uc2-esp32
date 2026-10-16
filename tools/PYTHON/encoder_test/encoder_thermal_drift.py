@@ -29,9 +29,9 @@ Photos (Hikrobot camera, MVS SDK, client closed) go to
 <csv name>_photos/0000_<time>.png, about 30 MB each.
 
 Usage:
-    uv run tools/PYTHON/encoder_test/12hrstest_thermal_drift.py --photo-test --gain 23
-    uv run tools/PYTHON/encoder_test/12hrstest_thermal_drift.py --port COM7 --gain 23 --quick
-    uv run tools/PYTHON/encoder_test/12hrstest_thermal_drift.py --port COM7 --gain 23
+    uv run tools/PYTHON/encoder_test/encoder_thermal_drift.py --photo-test --gain 23
+    uv run tools/PYTHON/encoder_test/encoder_thermal_drift.py --port COM7 --gain 23 --quick
+    uv run tools/PYTHON/encoder_test/encoder_thermal_drift.py --port COM7 --gain 23
 
 Output: one CSV row per sample, '#' lines are run metadata
 (pandas: read_csv(..., comment='#')). encoder_test.ipynb (part 6, DRIFT)

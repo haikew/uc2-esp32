@@ -8,7 +8,7 @@ X-axis 24 hour test over the CAN bus: go back and forth between two
 positions and take a photo at each visit.
 
 Version for the rotational encoder: an open-loop run does not use the
-firmware's encoder calibration, see below. 24hrstest_can_linear.py is the
+firmware's encoder calibration, see below. encoder_24h_repeatability.py is the
 version the linear (magnetic) encoder runs were made with.
 
 Same test as 24hrstest.py, but the PC is connected to the USB port of the

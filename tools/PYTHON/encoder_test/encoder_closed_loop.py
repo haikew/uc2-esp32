@@ -32,10 +32,10 @@ The PC is on the USB port of the CAN master; X with its encoder (--node 11),
 Y (--y-node 12) and Z (--z-node 13) are CAN slaves, Y and Z open loop.
 
 Usage:
-    uv run tools/PYTHON/encoder_test/closed_loop_test_can.py --port COM6 --no-camera
-    uv run tools/PYTHON/encoder_test/closed_loop_test_can.py --port COM7 --status
-    uv run tools/PYTHON/encoder_test/closed_loop_test_can.py --port COM7 --mode 1
-    uv run tools/PYTHON/encoder_test/closed_loop_test_can.py --port COM7 --full
+    uv run tools/PYTHON/encoder_test/encoder_closed_loop.py --port COM6 --no-camera
+    uv run tools/PYTHON/encoder_test/encoder_closed_loop.py --port COM7 --status
+    uv run tools/PYTHON/encoder_test/encoder_closed_loop.py --port COM7 --mode 1
+    uv run tools/PYTHON/encoder_test/encoder_closed_loop.py --port COM7 --full
 
 Output: <name>.csv, one row per visit, <name>_walk.csv, one row per random
 move, photos in <name>_photos. '#' lines are run metadata

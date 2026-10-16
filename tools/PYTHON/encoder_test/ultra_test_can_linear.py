@@ -3,7 +3,7 @@
 X-axis ultra test over the CAN bus: the 24 hour test (back and forth between
 two positions, a photo at each visit) with random X moves between the visits.
 
-Version for the linear (magnetic) encoder: 24hrstest_can_linear.py with the
+Version for the linear (magnetic) encoder: encoder_24h_repeatability.py with the
 random moves added. The first legs and the start check rely on the firmware's
 encoder calibration (counts per step, posErr); ultra_test_can_rotational.py
 does not.

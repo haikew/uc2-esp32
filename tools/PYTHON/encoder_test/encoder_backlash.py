@@ -26,7 +26,7 @@ The PC is on the USB port of the CAN master, the axis sits on a CAN slave (AXES)
 The MVS client must not have the camera open.
 
 Usage: edit the settings below, then
-    uv run tools/PYTHON/encoder_test/test_backlash.py
+    uv run tools/PYTHON/encoder_test/encoder_backlash.py
 
 Output: encoder_test_data/backlash_<axis>_<time>.csv (+ _photos/). Lines starting
 with '#' are metadata (pandas: read_csv(..., comment='#')).

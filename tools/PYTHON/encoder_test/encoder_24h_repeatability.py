@@ -36,10 +36,10 @@ X (--node 11), Y (--y-node 12) and Z (--z-node 13) are CAN slaves. Photos
 about 30 MB each.
 
 Usage:
-    uv run tools/PYTHON/encoder_test/24hrstest_can_linear.py --photo-test --gain 23
-    uv run tools/PYTHON/encoder_test/24hrstest_can_linear.py --port COM7 --status
-    uv run tools/PYTHON/encoder_test/24hrstest_can_linear.py --port COM7 --speed 100000 --gain 23 --quick
-    uv run tools/PYTHON/encoder_test/24hrstest_can_linear.py --port COM7 --speed 100000 --gain 23
+    uv run tools/PYTHON/encoder_test/encoder_24h_repeatability.py --photo-test --gain 23
+    uv run tools/PYTHON/encoder_test/encoder_24h_repeatability.py --port COM7 --status
+    uv run tools/PYTHON/encoder_test/encoder_24h_repeatability.py --port COM7 --speed 100000 --gain 23 --quick
+    uv run tools/PYTHON/encoder_test/encoder_24h_repeatability.py --port COM7 --speed 100000 --gain 23
 
 Output: one CSV row per visit, '#' lines are run metadata
 (pandas: read_csv(..., comment='#')).
