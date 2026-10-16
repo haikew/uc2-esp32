@@ -51,13 +51,13 @@ MODE = 0               # axis mode: 0 open loop, 1 monitor, 2 correct, 3 servo
 STEP = 256             # pos1 = pos0 + STEP
 SLOW_SPEED = 1000      # speed of pos0 -> pos1 and pos1 -> pos0
 APPROACH = 20000       # pos1 -> pos1 + APPROACH -> pos1 (> backlash)
-SPEED = 10000         # speed of that excursion
-ACCEL = 10000         # acceleration of all moves
+SPEED = 100000         # speed of that excursion
+ACCEL = 1000000         # acceleration of all moves
 ROUNDS = 10
 
 # camera
 GAIN = 5.0             # camera gain in dB
-EXPOSURE = None        # exposure in us, None = as set in the camera
+EXPOSURE = 100000        # exposure in us, None = as set in the camera
 PHOTO_DELAY = 2.0      # seconds between the end of a move and the photo
 
 #       CAN node id, SDO sub-index on the slave, stepperid on the master, has an encoder
