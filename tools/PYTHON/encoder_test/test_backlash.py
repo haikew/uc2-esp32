@@ -65,8 +65,8 @@ AXES = {"X": (11, 2, 1, True),
         "Y": (12, 3, 2, False)}
 NODE, SUB, STEPPER, HAS_ENCODER = AXES[AXIS]
 
-DATA_DIR = os.path.normpath(os.path.join(  # <repo>/encoder_test_data, git-ignored
-    os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "encoder_test_data"))
+# results (CSV, photos) go to encoder_test_data/ next to this script
+DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "encoder_test_data")
 
 # slave object dictionary (main/src/canopen/UC2_OD_Indices.h)
 OD_POSITION, OD_STATUS, OD_MODE, OD_RAW = 0x2001, 0x2004, 0x2042, 0x204B

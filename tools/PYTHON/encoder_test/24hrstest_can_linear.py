@@ -155,9 +155,8 @@ from datetime import datetime
 
 import serial
 
-# results (CSV, photos) go to <repo>/encoder_test_data, which git ignores
-DATA_DIR = os.path.normpath(os.path.join(
-    os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "encoder_test_data"))
+# results (CSV, photos) go to encoder_test_data/ next to this script
+DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "encoder_test_data")
 
 # ---- the two places: absolute step positions (x, y, z) ----------------------
 # Used when --slide-pos/-y/-z and --sample-pos/-y/-z are not given.

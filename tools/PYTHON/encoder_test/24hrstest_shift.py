@@ -44,7 +44,7 @@ Correlating the photos takes a few minutes; --replot reads the shifts from
 <csv name>_shift.csv again and only makes the summary and the plots.
 
 Usage:
-    uv run tools/PYTHON/encoder_test/24hrstest_shift.py encoder_test_data/24hrstest_can_x_20261003_110333.csv
+    uv run tools/PYTHON/encoder_test/24hrstest_shift.py tools/PYTHON/encoder_test/encoder_test_data/24hrstest_can_x_20261003_110333.csv
     uv run tools/PYTHON/encoder_test/24hrstest_shift.py run.csv --tick-um 10 --px-per-tick 82.8
     uv run tools/PYTHON/encoder_test/24hrstest_shift.py run.csv --replot
 
