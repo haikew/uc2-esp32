@@ -1,148 +1,48 @@
 #!/usr/bin/env python3
 """
-X-axis 24 hour test over the CAN bus: go back and forth between two
-positions and take a photo at each visit.
+X-axis 24 hour repeatability test over the CAN bus, open loop: go back and
+forth between the calibration slide and the sample and take a photo at each
+visit. Every --interval seconds (default 10 min) for --hours (default 24),
+145 photos with the defaults.
 
-Version used with the linear (magnetic) encoder: the first legs and the
-start check rely on the firmware's encoder calibration (counts per step,
-posErr). 24hrstest_can_rotational.py does not.
+The firmware runs X open loop (axismode 0); this script reads the linear
+encoder and compensates by itself. The raw count at the first arrival at a
+place is its reference. At every later arrival the count is compared with
+it; if it is more than --comp-counts off, all X targets are shifted by the
+missing steps and the place is approached again from the same side (--preload
+back-off, so the backlash stays the same), up to --comp-tries times. The
+steps per count come from the two references (travel / counts between the
+places). --no-compensate only records.
 
-Same test as 24hrstest.py, but the PC is connected to the USB port of the
-CAN MASTER and the X axis + encoder sit on a CAN slave (--node, default 11).
-Moves go through the master's /motor_act (the master forwards them as SDO
-writes), everything else is read and written in the slave's object
-dictionary through the master's SDO bridge
-({"task": "/can_act", "sdo": {...}}): position 0x2001, running 0x2004,
-measured 0x2040, posErr 0x2041, axis mode 0x2042, health 0x2043,
-fault 0x2044, calibrated 0x2046, calibrate 0x2048, counts per step 0x2049,
-backlash 0x204A, raw counts 0x204B.
---status only prints the axis status read over CAN and does not move.
+Lost steps: a correction above --lost-steps means the motor stalled. It is
+recovered at --recover-speed in chunks of --recover-chunk steps; after every
+chunk the encoder must have followed, otherwise the run ends. The first leg
+to each place (its reference) is driven at --recover-speed too. The samples
+of a lost move go to <csv name>_lost_steps.csv. After lost steps the step
+counter is reset from the encoder at the end of the run (back at the
+calibration slide); if the run ended elsewhere, --resync brings X back to the
+calibration slide by the encoder first.
 
-Two absolute positions are given: --slide-pos (the calibration slide) and
---sample-pos (the sample). Every --interval seconds
-(default 10 min) the axis moves to the other position and a photo is taken
-there, for --hours hours (default 24): calibration slide, sample, calibration slide, sample, ...
-With the defaults that is 145 photos, 73 of the calibration slide and 72 of the sample.
+Safety: nothing moves before the camera and all three axes have answered and
+all targets passed --limit / --z-limit. X, then Y, then Z into focus (with a
+safe Z, Z retracts first). Any SDO failure, move timeout or latched fault
+ends the run and leaves the axes where they are; only a failed photo is
+skipped.
 
-All moves are done in --mode 0 (open loop) by default: the firmware does
-not use the encoder, this script does the compensation with its own data.
-The raw encoder count at the first arrival at each place is the reference
-for that place. At every later arrival the count is compared with it
-(encDriftCounts). If it is more than --comp-counts (5) counts off, all X
-targets are shifted by the missing steps (offsetSteps), the axis backs off
---preload steps towards the place it came from and approaches again, so the
-backlash stays the same; this is repeated up to --comp-tries (3) times
-(compSteps = what was added at this visit, residualCounts = what is left).
-The steps per count come from our own references (the travel between the two
-places divided by the counts between them), not from the firmware's
-calibration. --no-compensate only records.
-
-Lost steps: the encoder is trusted. A correction of more than --lost-steps
-(2000) steps means the motor stalled during the move while the step counter
-ran on without it. It is compensated like any other error, but slowly and
-checked: at --recover-speed (10000), in chunks of --recover-chunk (5000)
-steps up to the approach point. After every chunk the encoder must have seen
-the steps; at the first chunk it does not follow nothing more is sent and
-the run ends (so a jammed stage or a dead encoder is pushed one chunk at
-most). The run also ends if the place is still more than --lost-steps off
-after the recovery, or if an SDO read or a move fails during it. What happened
-is printed and recorded in the row of that visit: event = LOST_STEPS,
-xMoveStart / xMoveSec (when the move started and how long it took),
-lostSteps and travelledPct (how much of the move is missing), stallRawCounts
-and stallPos (where the stage stopped: encoder count and step position),
-stallAfterSec / stallAfterSteps (the last sample taken during the move at
-which the encoder still followed the step counter), compTries, compSpeed,
-compSteps, residualCounts and offsetSteps (how it was compensated). The
-samples taken during the lost move and the state after every recovery chunk
-(time, step counter, encoder) go to <csv name>_lost_steps.csv.
-The first leg to each place is driven at --recover-speed too: that arrival
-is the encoder reference of the place, so there is no count yet to
-compensate to. If the encoder did not see the steps of that leg, X goes back
-to where the leg started (that count is known) in checked chunks and the leg
-is driven once more; a second failure ends the run. After a run with
-lost-step events the firmware's step counter
-is off by offsetSteps; at the end of the run, back at the calibration slide, it is
-set from the encoder again. If a run ended somewhere else (error, Ctrl+C),
-the next run refuses to start (step counter and encoder disagree): --resync
-then brings X back to the calibration slide by the encoder (raw count
---resync-raw, slowly, in checked chunks), sets the step counter from the
-encoder there and exits.
-The run only ends when the first arrival at a place (its reference) did not
-follow the steps, when a single correction is above --max-comp steps
-(default: 1.1 x the travel between the two places, more cannot be lost in
-one move), when the total is above --max-offset steps, or when the place is
-still not reached after --comp-tries corrections. The row of that visit is
-written before the run ends.
-Modes 1 = monitor, 2 = correct, 3 = servo are available, but the firmware's
-watchdog stops the axis in all three once posErr passes its lag limit, see
-below. In modes 2 and 3 the firmware adopts the encoder
-position as the new step counter after every move, so compare
-"measured"/"commanded" there, not rawCounts.
-
-Calibration: modes 1..3 only work with a valid encoder calibration in the
-firmware (sign, counts per step, backlash), otherwise "measured"/"posErr"
-are wrong and CORRECT/SERVO move the axis to the wrong place. So with
---mode 1..3 the script first runs the firmware's calibration (SDO 0x2048 = 1:
-the axis sweeps +55000 steps from where it is and back, the result is stored
-in the slave), --no-calibrate skips it. Over CAN only the resulting counts
-per step and backlash can be read back, not the fit quality.
-After that the first leg (to the sample position) is run open loop (the
-axis mode is set to 0 for this leg, there is no per-move override over CAN)
-as a scale check: if posErr changes by more than --max-drift steps on it, a
-closed-loop run is aborted there. In modes 1..3 the firmware's watchdog
-stops the axis and latches LOST_STEPS as soon as posErr passes its lag limit
-(about 136 steps), and posErr grows with the travel when the calibrated
-counts per step are slightly off - over the ~296000 steps between the two
-places that needs the scale to be right to about 0.03 %.
-
-Safety, for an unattended run:
-  - nothing moves before the camera and all three axes have answered and all
-    targets passed the --limit / --z-limit checks;
-  - the order is always X, then Y, then Z into focus (with a safe Z: Z
-    retracts first); every move waits until the axis has stopped at its
-    target before the next one starts. Z only ever goes to the two focus
-    positions (and the safe Z, if set);
-  - any SDO failure, move timeout or latched axis fault ends the run; the
-    axes stay where they are, nothing is retried and no fault is cleared;
-  - only a failed photo is skipped.
-
-The two places are 3D positions (x, y, z), set as the constants SLIDE_XYZ
-and SAMPLE_XYZ at the top of this file (the command line overrides them).
-Y (--y-node, default 12) and the focus Z (--z-node, default 13) are further
-CAN slaves, moved open loop (no encoder). At every visit: Z retracts to
-SAFE_Z / --safe-z (if one is set), X moves, Y moves, Z goes to the focus of
-that place, then the photo is taken. With a safe Z, Z is also retracted
-before the calibration sweep and always comes into focus from the safe
-position, so its backlash is the same at every photo. Without one, Z stays
-in focus while X and Y move. After the last visit the stage goes back to the
-calibration slide (x, y, z in focus), see --no-return-to-slide; if the run ends
-early (error, Ctrl+C) the axes stay where they are.
-
-Backlash: the calibration slide position is always approached from the sample position
-and the other way round, also the very first time, so every photo of one
-position is taken after the same leg.
-
-The photos are taken with the Hikrobot camera (needs the MVS SDK installed,
-and the MVS client must not have the camera open) and saved as
-<csv name>_photos/calibration_slide/0000_calibration_slide_<time>.png and .../sample/0001_sample_<time>.png,
-where 24hrstest_shift.py looks for them (the first photo of a place is its
-reference). Exposure, gain etc. are used as they are set in the
-camera unless --gain is given. --photo-test only takes one photo, to check
-the camera and the picture, and does not move the axis.
-A full-size png is about 30 MB, so 24 h need about 5 GB of disk space.
-
-The PC is kept awake while the script runs. Stop early with Ctrl+C.
-
-Connect to the USB port of the CAN master.
+The places are (x, y, z) step positions, SLIDE_XYZ / SAMPLE_XYZ below (the
+command line overrides them). The PC is on the USB port of the CAN master;
+X (--node 11), Y (--y-node 12) and Z (--z-node 13) are CAN slaves. Photos
+(Hikrobot camera, MVS SDK, client closed) go to <csv name>_photos/<place>/,
+about 30 MB each.
 
 Usage:
     uv run tools/PYTHON/encoder_test/24hrstest_can_linear.py --photo-test --gain 23
     uv run tools/PYTHON/encoder_test/24hrstest_can_linear.py --port COM7 --status
-    uv run tools/PYTHON/encoder_test/24hrstest_can_linear.py --port COM7 --speed 100000 --accel 100000 --gain 23 --quick
-    uv run tools/PYTHON/encoder_test/24hrstest_can_linear.py --port COM7 --speed 100000 --accel 100000 --gain 23
+    uv run tools/PYTHON/encoder_test/24hrstest_can_linear.py --port COM7 --speed 100000 --gain 23 --quick
+    uv run tools/PYTHON/encoder_test/24hrstest_can_linear.py --port COM7 --speed 100000 --gain 23
 
-Output: the table is printed and also saved as CSV, one row per visit.
-Lines starting with '#' are run metadata (pandas: read_csv(..., comment='#')).
+Output: one CSV row per visit, '#' lines are run metadata
+(pandas: read_csv(..., comment='#')).
 """
 import argparse
 import csv
@@ -162,26 +62,18 @@ DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "encoder_tes
 # Used when --slide-pos/-y/-z and --sample-pos/-y/-z are not given.
 SLIDE_XYZ = (147808, 328052, 41438)    # calibration slide
 SAMPLE_XYZ = (-148202, 328022, 43168)  # sample
-# None = Z is not retracted: X and Y move with Z still at the focus of the
-# place they leave, then Z goes to the new focus. X has been traversed by hand
-# at both focus heights without touching anything, so this is the default.
+# None = Z stays in focus while X and Y move (X clears both focus heights).
 # A number = Z goes there before X / Y move, and comes into focus afterwards.
 SAFE_Z = None
 # ------------------------------------------------------------------------------
 
-MODES = {0: "OPEN_LOOP", 1: "MONITOR", 2: "CORRECT", 3: "SERVO"}
 FAULTS = {0: "NONE", 1: "STALL", 2: "LOST_STEPS", 3: "DIVERGENCE", 4: "TIMEOUT",
           5: "CAL_INVALID", 6: "CAL_FAILED", 7: "ENC_NOISE"}
-# CORRECT / SERVO adopt the encoder position as the new step counter, so the
-# move ends near the target, not exactly on it
-ARRIVE_TOL = 200
-# the firmware's calibration sweeps preload 5000 + 10 x 5000 steps in + and back
-CAL_SWEEP = 55000
 
 # slave object dictionary (main/src/canopen/UC2_OD_Indices.h)
 OD_POSITION, OD_STATUS = 0x2001, 0x2004
 OD_MEASURED, OD_POS_ERR, OD_MODE, OD_HEALTH, OD_FAULT = 0x2040, 0x2041, 0x2042, 0x2043, 0x2044
-OD_CALIBRATED, OD_CALIBRATE, OD_CPS_Q16, OD_BACKLASH, OD_RAW = 0x2046, 0x2048, 0x2049, 0x204A, 0x204B
+OD_CALIBRATED, OD_CPS_Q16, OD_BACKLASH, OD_RAW = 0x2046, 0x2049, 0x204A, 0x204B
 OD_RESET = 0x2045  # 1 = trust encoder, 2 = trust steps, 3 = force rehome
 
 
@@ -258,43 +150,11 @@ class Axis:
         self.sdo(OD_MODE, mode, "u8")
         time.sleep(0.5)
 
-    def calibrate(self, timeout=120.0):
-        """Run the firmware's encoder calibration (sign, counts per step,
-        backlash). The axis sweeps +55000 steps from where it is and comes back.
-        Returns what can be read back over CAN."""
-        start = self.position()[0]
-        self.sdo(OD_CALIBRATE, 1, "u8")
-        t0 = time.time()
-        moved, idle = False, None
-        while True:
-            pos, running = self.position()
-            moved = moved or pos != start or running
-            if moved and not running and pos == start:
-                idle = idle or time.time()
-                if time.time() - idle > 2.0:  # the sweep pauses between its segments
-                    break
-            else:
-                idle = None
-            if not moved and time.time() - t0 > 15:
-                raise RuntimeError("calibration did not start (the axis never moved)")
-            if time.time() - t0 > timeout:
-                raise TimeoutError("calibration did not finish")
-            time.sleep(0.1)
-        time.sleep(1.0)  # the slave publishes the result on its next loop
-        fault = self.sdo(OD_FAULT, typ="u8")
-        if fault == 6 or not self.sdo(OD_CALIBRATED, typ="u8"):
-            raise RuntimeError(f"axis calibration failed (fault {fault} {FAULTS.get(fault, '?')})")
-        q16 = self.sdo(OD_CPS_Q16)  # signed: the sign is the count direction
-        return {"countsPerStep": abs(q16) / 65536, "countSign": 1 if q16 >= 0 else -1,
-                "backlashSteps": abs(self.sdo(OD_BACKLASH))}
-
     def move_to(self, target, speed, accel, tol=0, settle=1.0, timeout=60.0, encoder=True,
                 trace=None):
-        """Absolute move in the axis's current mode, wait until arrived,
-        return (commanded, measured, posErr, rawCounts). encoder=False is for
-        an axis without encoder (focus): only the step position is used.
-        trace: a list, gets (seconds since the start, step position, raw
-        encoder count) for every poll during the move."""
+        """Absolute move, wait until arrived, return (commanded, measured,
+        posErr, rawCounts). encoder=False: an axis without encoder (Y, Z).
+        trace: a list, gets (seconds, step position, raw count) per poll."""
         stepper = {"stepperid": self.stepper, "position": target, "speed": speed, "isabs": 1}
         if accel is not None:
             stepper["acceleration"] = accel
@@ -312,7 +172,7 @@ class Axis:
                 self.check_fault(f"move to {target}")
             if not running and abs(pos - target) <= tol:
                 arrived = arrived or time.time()
-                if time.time() - arrived > settle:  # corrections / adoption follow the move
+                if time.time() - arrived > settle:
                     return self.feedback() if encoder else (pos, pos, 0, 0)
             else:
                 arrived = None
@@ -488,7 +348,7 @@ def main():
                     help="retracted Z position: Z goes here before every X / Y "
                          "move (default: Z is not retracted)")
     ap.add_argument("--compensate", action=argparse.BooleanOptionalAction, default=True,
-                    help="mode 0: correct X ourselves when the encoder at a place is "
+                    help="correct X ourselves when the encoder at a place is "
                          "off its first arrival there (--no-compensate: only record)")
     ap.add_argument("--comp-counts", type=int, default=5,
                     help="compensate when the encoder is more than this many counts off")
@@ -517,11 +377,6 @@ def main():
                          "(default: 1.1 x the travel between the two places)")
     ap.add_argument("--max-offset", type=int, default=3000000,
                     help="largest total correction in steps; beyond it the run ends")
-    ap.add_argument("--max-drift", type=int, default=80,
-                    help="closed-loop runs only: largest posErr change allowed on "
-                         "the open-loop check leg. The firmware latches a "
-                         "LOST_STEPS fault as soon as posErr passes its lag limit "
-                         "(about 136 steps with the present calibration)")
     ap.add_argument("--z-node", type=int, default=13, help="CAN node id of the Z slave")
     ap.add_argument("--z-sub", type=int, default=4,
                     help="SDO sub-index of the axis on the Z slave (axis id + 1, Z = 4)")
@@ -544,14 +399,6 @@ def main():
     ap.add_argument("--limit", type=int, default=400000,
                     help="refuse X / Y positions farther than this from where "
                          "the axis is now (guards against a typo)")
-    ap.add_argument("--mode", type=int, choices=sorted(MODES), default=0,
-                    help="axis mode for every move: 0 = open loop (default; the "
-                         "encoder is only recorded), 1 = monitor, 2 = correct, "
-                         "3 = servo. In 1..3 the firmware stops the axis when "
-                         "posErr passes its lag limit")
-    ap.add_argument("--calibrate", action=argparse.BooleanOptionalAction, default=None,
-                    help="run the firmware's encoder calibration first (default: "
-                         "yes if --mode is 1..3, --no-calibrate to skip)")
     ap.add_argument("--speed", type=int, default=10000)
     ap.add_argument("--accel", type=int, default=100000,
                     help="acceleration for all X moves")
@@ -567,6 +414,7 @@ def main():
                     help="only take one photo and exit, the axis is not moved")
     ap.add_argument("--out", default=None, help="CSV file (default: timestamped name in encoder_test_data/)")
     args = ap.parse_args()
+    os.makedirs(DATA_DIR, exist_ok=True)
     if args.photo_test:
         camera = Camera(args.gain, args.exposure)
         try:
@@ -638,8 +486,6 @@ def main():
             < max(args.slide_z, args.sample_z):
         ap.error("--safe-z lies between the two focus positions, so it is closer "
                  "than the focus of one of the places")
-    if args.calibrate is None:
-        args.calibrate = args.mode > 0
     max_comp = args.max_comp or round(1.1 * abs(args.slide_pos - args.sample_pos))
     out = args.out or os.path.join(DATA_DIR, f"24hrstest_can_linear_x_{datetime.now():%Y%m%d_%H%M%S}.csv")
     trace_path = os.path.splitext(out)[0] + "_lost_steps.csv"
@@ -648,8 +494,7 @@ def main():
     focus = {"calibration slide": args.slide_z, "sample": args.sample_z}
     if args.quick:
         args.interval, args.hours = 20.0, 3 * 20 / 3600
-    visits = round(args.hours * 3600 / args.interval) + 1 if args.quick \
-        else int(args.hours * 3600 / args.interval) + 1
+    visits = int(args.hours * 3600 / args.interval + 1e-6) + 1
 
     camera = Camera(args.gain, args.exposure)  # before anything moves, so a camera problem shows up early
     photos = os.path.splitext(out)[0] + "_photos"
@@ -666,9 +511,8 @@ def main():
 
         print(f"current = {current}, calibration slide = {args.slide_pos}, sample = {args.sample_pos}, "
               f"{visits} visits every {args.interval:g} s ({args.hours:g} h), "
-              f"speed = {args.speed}, accel = {args.accel or 'default'}, "
-              f"mode = {args.mode} ({MODES[args.mode]})")
-        if args.mode == 0 and args.compensate:
+              f"speed = {args.speed}, accel = {args.accel or 'default'}, open loop")
+        if args.compensate:
             print(f"compensation: encoder more than {args.comp_counts} counts off its reference, "
                   f"up to {max_comp} steps at once and {args.max_offset} in total; above "
                   f"{args.lost_steps} steps = lost-step event, recovered at "
@@ -676,7 +520,7 @@ def main():
                   f"{args.recover_chunk} steps, the run ends at the first chunk the "
                   f"encoder does not follow. The first leg to each place (its encoder "
                   f"reference) is driven at {min(args.speed, args.recover_speed)} steps/s")
-        if args.mode == 0 and status["calibrated"] and abs(status["posErr"]) > 10000:
+        if status["calibrated"] and abs(status["posErr"]) > 10000:
             # more than the firmware's scale error can explain: lost steps
             raise SystemExit(
                 f"the step counter ({current}) and the encoder ({status['measured']}) disagree "
@@ -718,36 +562,17 @@ def main():
         if args.safe_z is None:
             print("no safe Z set: X and Y move with Z at the focus of the place they leave")
         else:
-            # retract before anything moves in X (the calibration sweep too)
             zpos[0] = z_to(args.safe_z)
-
-        cal = None
-        if args.calibrate:
-            print(f"calibrating the encoder (the axis sweeps +{CAL_SWEEP} steps and back) ...")
-            cal = axis.calibrate()
-            print(f"calibration ok: countsPerStep = {cal['countsPerStep']:.5f}, "
-                  f"countSign = {cal['countSign']}, backlash = {cal['backlashSteps']} steps")
-            status = axis.status()
-        elif args.mode:
-            # the two places were taught in as step positions: re-anchor the encoder
-            # to the step counter (no motion), so an old posErr is not "corrected"
-            print(f"posErr was {status['posErr']} steps: re-anchoring the encoder to the step counter")
-            axis.sdo(OD_RESET, 2, "u8")
-            time.sleep(1.0)
-            status = axis.status()
-        if status.get("fault") == 5:
-            print("WARNING: the firmware reports CAL_INVALID - its calibration was only "
-                  "rescaled after a microstep change, run with --calibrate")
-        if args.mode and not status.get("calibrated"):
-            raise SystemExit("the axis is not calibrated: the firmware would run every move "
-                             "open loop. Run with --calibrate")
+        if status["axismode"] != 0:  # this script compensates, not the firmware
+            print(f"axismode was {status['axismode']}: setting it to 0 (open loop)")
+            axis.set_mode(0)
 
         with open(out, "w", newline="") as f:
             f.write(f"# test=24hrstest_can_linear_x port={args.port} node={args.node} "
                     f"started={datetime.now().isoformat(timespec='seconds')}\n")
             f.write(f"# slide_pos={args.slide_pos} sample_pos={args.sample_pos} "
                     f"interval={args.interval:g} hours={args.hours:g} speed={args.speed} "
-                    f"accel={args.accel} mode={args.mode} camera={camera.settings}\n")
+                    f"accel={args.accel} mode=0 camera={camera.settings}\n")
             f.write(f"# slide_y={args.slide_y} sample_y={args.sample_y} y_node={args.y_node} "
                     f"y_speed={args.y_speed} y_accel={args.y_accel}\n")
             f.write(f"# slide_z={args.slide_z} sample_z={args.sample_z} safe_z={args.safe_z} "
@@ -757,8 +582,6 @@ def main():
                     f"lost_steps={args.lost_steps} recover_speed={args.recover_speed} "
                     f"recover_chunk={args.recover_chunk} "
                     f"max_comp={max_comp} max_offset={args.max_offset}\n")
-            if cal:
-                f.write("# calibration " + " ".join(f"{k}={v}" for k, v in cal.items()) + "\n")
             w = csv.writer(f)
             # the columns of a lost-step event, empty in the other rows (the start
             # and the duration of the X move and compTries are always filled in)
@@ -787,10 +610,9 @@ def main():
                     return (args.slide_pos - args.sample_pos) / (raw0["calibration slide"] - raw0["sample"])
                 return fw_steps_per_count
 
-            def x_to(x, mode, distance, speed=None, trace=None, settle=None):
+            def x_to(x, distance, speed=None, trace=None):
                 speed = speed or args.speed
-                return axis.move_to(x, speed, args.accel, ARRIVE_TOL if mode >= 2 else 0,
-                                    settle or (2.0 if mode >= 2 else 1.0),
+                return axis.move_to(x, speed, args.accel, 0, 1.0,
                                     30 + 3 * abs(distance) / speed, trace=trace)
 
             def recover_to(goal, speed, visit, place, k):
@@ -853,33 +675,26 @@ def main():
                           f"lag {lag(s, x_start, raw_start, k):>7} steps")
                 save_trace(t_move, visit, place, "move", trace, x_start, raw_start, k)
 
-            def go(visit, place, mode=args.mode, photo=True, into_focus=False):
+            def go(visit, place, photo=True, into_focus=False):
                 target = places[place]
                 move = target - prev[0]
                 if args.safe_z is not None:  # retract, so nothing can touch while X / Y move
                     zpos[0] = z_to(args.safe_z)
-                if mode != cur_mode[0]:  # over CAN a move follows the axis mode
-                    axis.set_mode(mode)
-                    cur_mode[0] = mode
                 x_start, raw_start = axis.sdo(OD_POSITION), axis.sdo(OD_RAW)
                 t_move, trace = datetime.now(), []
                 # the first arrival at a place is its encoder reference: go there
                 # slowly, lost steps on this leg could not be compensated
-                slow = min(args.speed, args.recover_speed) if mode == 0 and place not in raw0 else None
-                commanded, measured, pos_err, raw = x_to(target + offset[0], mode, move, slow, trace)
+                slow = min(args.speed, args.recover_speed) if place not in raw0 else None
+                commanded, measured, pos_err, raw = x_to(target + offset[0], move, slow, trace)
                 prev[0] = target
                 ev = dict.fromkeys(event_cols, "")
                 ev["xMoveStart"] = t_move.isoformat(timespec="milliseconds")
                 ev["xMoveSec"] = round((datetime.now() - t_move).total_seconds(), 1)
                 abort = None  # set: the row of this visit is written, then the run ends
-                # Our own compensation (open loop only): the encoder must read what
-                # it read at the first arrival at this place. If it is off by more
-                # than --comp-counts, shift all X targets by the missing steps and
-                # approach the place again from the same side (same backlash).
                 enc_drift = resid = comp = ""
                 sent, seen = commanded - x_start, raw - raw_start
                 comp0 = tries0 = 0  # what a repeated first leg added
-                if mode == 0 and args.compensate and place not in raw0:
+                if args.compensate and place not in raw0:
                     # This arrival becomes the encoder reference of the place, so the
                     # encoder must have seen the steps of the leg. If not: back to
                     # where the leg started (that count is known), and once more.
@@ -914,7 +729,7 @@ def main():
                             offset[0] += pos - x_start
                             x_start, raw_start = pos, axis.sdo(OD_RAW)
                             t_move, trace = datetime.now(), []
-                            commanded, measured, pos_err, raw = x_to(target + offset[0], mode, move,
+                            commanded, measured, pos_err, raw = x_to(target + offset[0], move,
                                                                      speed, trace)
                         except (RuntimeError, TimeoutError) as e:
                             abort = f"recovery on the way to '{place}' failed, the run ends here: {e}"
@@ -923,7 +738,7 @@ def main():
                         print(f"    !   again: {sent:+d} steps sent, the encoder saw {seen:+d} counts "
                               f"= {round(seen * k):+d} steps (offset now {offset[0]:+d})")
                     ev["compTries"] = tries0
-                if mode == 0 and not abort:
+                if not abort:
                     enc_drift = resid = raw - raw0.setdefault(place, raw)
                     comp, tries = comp0, tries0
                     k = steps_per_count()
@@ -960,8 +775,8 @@ def main():
                                 if abort:
                                     break
                             else:
-                                x_to(approach, mode, abs(step) + args.preload, speed)
-                            commanded, measured, pos_err, raw = x_to(target + offset[0], mode,
+                                x_to(approach, abs(step) + args.preload, speed)
+                            commanded, measured, pos_err, raw = x_to(target + offset[0],
                                                                      args.preload, speed)
                         except (RuntimeError, TimeoutError) as e:
                             abort = f"compensation at '{place}' failed, the run ends here: {e}"
@@ -1012,40 +827,17 @@ def main():
                 f.flush()
                 if abort:
                     raise SystemExit(abort)
-                return pos_err
 
             print(f"\n{'time':>14} {'visit':>5} {'place':>17} {'move':>8} {'target':>10} "
                   f"{'commanded':>10} {'measured':>10} {'posErr':>7} {'rawCounts':>10} {'encDrift':>8} {'comp':>6} {'resid':>6} {'y':>8} {'z':>8}")
             prev = [current]
-            cur_mode = [status["axismode"]]
-            # the sample must be reached from the calibration slide side the first time too (its
-            # encoder reference is taken there): if the axis starts close to it,
-            # back off towards the calibration slide first
+            # every place is reached from the other one, the very first time too:
+            # if X starts close to the sample, back off towards the slide first
             if (current - args.sample_pos) * side["sample"] < args.preload:
-                if cur_mode[0] != 0:
-                    axis.set_mode(0)
-                    cur_mode[0] = 0
                 back = args.sample_pos + side["sample"] * args.preload
-                x_to(back, 0, back - current)
+                x_to(back, back - current)
                 prev[0] = current = back
-            # first to the sample, so the calibration slide is approached from the sample the
-            # very first time too. This leg is open loop and is the scale check:
-            # the encoder must see (about) as many steps as were commanded
-            first = args.sample_pos - current
-            err0 = axis.sdo(OD_POS_ERR)
-            # (+ offset: after a repeated leg the counter is off by what was lost)
-            drift = go(-1, "sample", mode=0, photo=False) - err0 + offset[0]
-            print(f"scale check: after {first} open-loop steps posErr changed by {drift} steps "
-                  f"({100 * drift / first if first else 0:+.3f} %)")
-            if args.mode and abs(drift) > args.max_drift:
-                # in modes 1..3 the firmware stops the axis and latches LOST_STEPS as
-                # soon as posErr passes its lag limit, and CORRECT would move the axis
-                # by this much away from the place that was taught in
-                raise SystemExit(
-                    f"scale check failed: posErr changed by {drift} steps (limit {args.max_drift}, "
-                    f"--max-drift). The calibrated counts per step do not fit this "
-                    f"{abs(first)}-step travel well enough for a closed-loop mode; "
-                    f"the axis is left at the sample position. Use --mode 0, or see --max-drift")
+            go(-1, "sample", photo=False)
 
             t0 = time.time()
             for visit in range(visits):
@@ -1077,8 +869,6 @@ def main():
         camera.close()
 
     print(f"raw data saved to {out}, photos in {photos}")
-    if args.mode:
-        print(f"note: the axis is left in axismode {args.mode} ({MODES[args.mode]})")
 
 
 if __name__ == "__main__":

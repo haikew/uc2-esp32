@@ -4,51 +4,32 @@
 # dependencies = ["pyserial>=3.5"]
 # ///
 """
-X-axis closed-loop test over the CAN bus: the moves of the 24 hour test and
-of the ultra test, with all corrections left to the firmware.
+X-axis closed-loop test over the CAN bus: back and forth between the
+calibration slide and the sample, a photo at each visit, random X moves in
+between. All corrections are left to the firmware's axis mode (--mode):
+1 = monitor (only reports), 2 = correct (default), 3 = servo. The script only
+sends the moves and records what the axis reports.
 
-Based on 24hrstest_can_rotational.py (back and forth between two positions,
-a photo at each visit) with the random moves of ultra_test_can_rotational.py
-between the visits. This script only sends the moves and records what the
-axis reports. It does not compensate, recover or calculate anything itself:
-that is the job of the firmware's axis mode, --mode:
-    1 = monitor  the firmware only watches and reports
-    2 = correct  the firmware checks every move and corrects it (default)
-    3 = servo    the firmware steers on the encoder during the move
+First X goes to the sample (no photo), so the calibration slide is reached
+from the sample side the first time too. Then every --interval seconds X
+moves to the other place: Z retracts to --safe-z (if set), X moves, Y moves,
+Z goes into focus, photo. Between two visits X makes --walk-min .. --walk-max
+moves to random targets between the places (--walk-margin inside them), then
+goes back to the place of the last photo, so the leg to a place is always the
+whole travel. A random move that would not be over before the visit is due is
+left out. --seed repeats the same moves, --walk-max 0 switches them off.
 
-The moves: first X goes to the sample (no photo), so the calibration slide
-is reached from the sample side the first time too. Then every --interval
-seconds X moves to the other place: calibration slide, sample, calibration
-slide, ... At every visit Z retracts to --safe-z (if one is set), X moves,
-Y moves, Z goes to the focus of that place, and the photo is taken.
-Between two visits X makes --walk-min .. --walk-max (2 .. 5) moves to random
-positions between the two places (--walk-margin steps inside them), then goes
-back to the place of the last photo and waits there, so the leg to a place
-is always the whole travel. A random move that would not be over before the
-visit is due, with the way back, is left out. --seed repeats the same random
-moves, --walk-max 0 switches them off. After the last visit X goes back to
-the calibration slide, see --no-return-to-slide.
+Default: a visit every 30 s for 10 min; --full: every 10 min for 24 h;
+--interval / --hours override both. --no-camera: the same moves, no photos.
+The firmware's encoder calibration runs first (--no-calibrate: only re-anchor
+the encoder to the step counter).
 
-The quick test is the default: a visit every 30 s for 10 min (21 visits).
---full is a visit every 10 min for 24 h. --interval and --hours override
-both.
-
---no-camera runs without the camera: the same moves, no photos, and the
-Hikrobot MVS SDK is not needed.
-
-Calibration: the firmware modes need a valid encoder calibration, so the
-script runs the firmware's calibration first (the axis sweeps in + from
-where it is and comes back). --no-calibrate skips it and only re-anchors the
-encoder to the step counter.
-
-A latched axis fault, a move that does not finish or an SDO failure ends the
-run: the row of that move is written, the axes stay where they are and no
-fault is cleared. Health DEGRADED (the firmware reported a divergence) is
+A latched fault, a move that does not finish or an SDO failure ends the run
+(the row is written, the axes stay, no fault is cleared). Health DEGRADED is
 recorded and the run goes on.
 
-The PC is connected to the USB port of the CAN MASTER; X with its encoder
-(--node, default 11), Y (--y-node, 12) and the focus Z (--z-node, 13) are
-CAN slaves. Y and Z have no encoder and are moved open loop.
+The PC is on the USB port of the CAN master; X with its encoder (--node 11),
+Y (--y-node 12) and Z (--z-node 13) are CAN slaves, Y and Z open loop.
 
 Usage:
     uv run tools/PYTHON/encoder_test/closed_loop_test_can.py --port COM6 --no-camera
@@ -56,10 +37,9 @@ Usage:
     uv run tools/PYTHON/encoder_test/closed_loop_test_can.py --port COM7 --mode 1
     uv run tools/PYTHON/encoder_test/closed_loop_test_can.py --port COM7 --full
 
-Output: <name>.csv, one row per visit, and <name>_walk.csv, one row per
-random move. Lines starting with '#' are run metadata
-(pandas: read_csv(..., comment='#')). The photos go to <name>_photos, where
-24hrstest_shift.py looks for them.
+Output: <name>.csv, one row per visit, <name>_walk.csv, one row per random
+move, photos in <name>_photos. '#' lines are run metadata
+(pandas: read_csv(..., comment='#')).
 """
 import argparse
 import csv
@@ -358,7 +338,7 @@ def main():
     ap.add_argument("--walk-margin", type=int, default=2000,
                     help="the random targets stay this many steps inside the two places")
     ap.add_argument("--seed", type=int, default=42,
-                    help="random seed of the random moves (default: picked and printed)")
+                    help="random seed of the random moves (same seed = same moves)")
     ap.add_argument("--node", type=int, default=11, help="CAN node id of the X slave")
     ap.add_argument("--sub", type=int, default=2,
                     help="SDO sub-index of the axis on the slave (its "
@@ -445,8 +425,6 @@ def main():
             < max(args.slide_z, args.sample_z):
         ap.error("--safe-z lies between the two focus positions, so it is closer "
                  "than the focus of one of the places")
-    if args.seed is None:
-        args.seed = random.SystemRandom().randrange(2 ** 32)
     rng = random.Random(args.seed)
 
     def walk_plan():

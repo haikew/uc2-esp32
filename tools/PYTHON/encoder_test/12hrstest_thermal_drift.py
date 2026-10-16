@@ -4,61 +4,38 @@
 # dependencies = ["pyserial>=3.5"]
 # ///
 """
-X-axis 12 hour thermal drift test over the CAN bus: the stage is left where
-it is and every --interval seconds (default 10 min) a photo is taken and the
-linear (magnetic) encoder and the motor step counter are read.
+X-axis 12 hour thermal drift test over the CAN bus: the stage stands still
+and every --interval seconds (default 10 min, 73 samples in 12 h) a photo is
+taken and the X encoder and step counter are read.
 
-Version for the linear encoder: it sits on the stage itself, so unlike the
-rotational encoder on the motor shaft it also sees what happens behind the
-motor (lead screw). The raw count is read from the same object (0x204B) for
-both encoders: which one that is depends on the encoder pins the X slave's
+Meant for the linear (magnetic) encoder: it sits on the stage and also sees
+the lead screw. The raw count (0x204B) is whichever encoder the X slave's
 firmware was built with (ENC_X_A / ENC_X_B in its PinConfig.h, linear =
-GPIO 40 / 41), this script cannot tell them apart.
+GPIO 40 / 41).
 
-Nothing moves: this script never sends a move (/motor_act), it only reads
-the slave's object dictionary through the master's SDO bridge
-({"task": "/can_act", "sdo": {...}}): step position 0x2001, running 0x2004,
-raw encoder counts 0x204B. Open loop, no compensation: the readings are only
-recorded. The one thing that is written is the axis mode (0x2042), and only
-if the X axis is not in mode 0 (open loop) at the start: in the closed-loop
-modes the firmware could move the axis by itself.
+Nothing moves: no /motor_act is sent, only SDO reads through the master. The
+one write: if X is not in axismode 0 at the start it is set to 0, since a
+closed-loop mode could move the axis by itself. Bring the stage to the place
+to watch, in focus, before the start.
 
-Bring the stage to the place to watch (and into focus) before the start.
-With the defaults there are 73 samples in 12 h (--hours, --interval).
+The first sample is the reference: dCounts / dSteps are the raw count / step
+counter minus their first value, dUm = dCounts * --um-per-count (1.95 um for
+the linear encoder; smaller drift only shows in the photos). dSteps must stay
+0, otherwise something moved the stage and the row is marked. The Y and Z step
+counters are recorded too if those slaves answer.
 
-The first sample is the reference: dCounts and dSteps are the raw encoder
-count and the step counter minus what they were at the first sample, dUm is
-dCounts in um (--um-per-count, 1.95 um for the linear encoder: a smaller
-drift does not show in the encoder, only in the photos). dSteps must stay
-0; if the step counter changes or the axis is running, something else moved
-the stage and the row is marked with '!'.
-
-The Y (--y-node, default 12) and Z (--z-node, default 13) step counters are
-recorded too if those slaves answer at the start (they have no encoder).
-
-Nothing ends the run but Ctrl+C: a failed read or a failed photo leaves that
-field of the row empty and the test goes on.
-
-The photos are taken with the Hikrobot camera (needs the MVS SDK installed,
-and the MVS client must not have the camera open) and saved as
-<csv name>_photos/0000_<time>.png. Exposure, gain etc. are used as they are
-set in the camera unless --gain / --exposure are given. --photo-test only
-takes one photo, to check the camera and the picture.
-A full-size png is about 30 MB, so 12 h need about 2.5 GB of disk space.
-
-The PC is kept awake while the script runs. Stop early with Ctrl+C.
-
-Connect to the USB port of the CAN master.
+Only Ctrl+C ends the run: a failed read or photo leaves that field empty.
+Photos (Hikrobot camera, MVS SDK, client closed) go to
+<csv name>_photos/0000_<time>.png, about 30 MB each.
 
 Usage:
     uv run tools/PYTHON/encoder_test/12hrstest_thermal_drift.py --photo-test --gain 23
     uv run tools/PYTHON/encoder_test/12hrstest_thermal_drift.py --port COM7 --gain 23 --quick
     uv run tools/PYTHON/encoder_test/12hrstest_thermal_drift.py --port COM7 --gain 23
 
-Output: the table is printed and also saved as CSV, one row per sample.
-Lines starting with '#' are run metadata (pandas: read_csv(..., comment='#')).
-encoder_test.ipynb (part 6, DRIFT) correlates the photos and plots the
-drift against the encoder.
+Output: one CSV row per sample, '#' lines are run metadata
+(pandas: read_csv(..., comment='#')). encoder_test.ipynb (part 6, DRIFT)
+correlates the photos and plots the drift against the encoder.
 """
 import argparse
 import csv
@@ -75,7 +52,7 @@ import serial
 DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "encoder_test_data")
 
 MODES = {0: "OPEN_LOOP", 1: "MONITOR", 2: "CORRECT", 3: "SERVO"}
-# stage travel per count of the linear encoder, as in 24hrstest_shift.py
+# stage travel per count of the linear encoder
 UM_PER_COUNT = 2000 / 1024
 
 # slave object dictionary (main/src/canopen/UC2_OD_Indices.h)
@@ -259,6 +236,7 @@ def main():
                     help="only take one photo and exit")
     ap.add_argument("--out", default=None, help="CSV file (default: timestamped name in encoder_test_data/)")
     args = ap.parse_args()
+    os.makedirs(DATA_DIR, exist_ok=True)
     if args.photo_test:
         camera = Camera(args.gain, args.exposure)
         try:
@@ -274,8 +252,7 @@ def main():
         ap.error("--interval and --hours must be > 0")
     if args.quick:
         args.interval, args.hours = 20.0, 3 * 20 / 3600
-    samples = round(args.hours * 3600 / args.interval) + 1 if args.quick \
-        else int(args.hours * 3600 / args.interval) + 1
+    samples = int(args.hours * 3600 / args.interval + 1e-6) + 1
     out = args.out or os.path.join(DATA_DIR, f"12hrstest_thermal_drift_x_{datetime.now():%Y%m%d_%H%M%S}.csv")
 
     camera = Camera(args.gain, args.exposure)  # first, so a camera problem shows up early
