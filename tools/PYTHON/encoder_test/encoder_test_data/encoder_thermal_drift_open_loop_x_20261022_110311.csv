@@ -1,0 +1,5 @@
+# test=encoder_thermal_drift_open_loop_x port=COM6 node=11 stepper=1 started=2026-10-22T11:03:15
+# interval=300 hours=14 mode=0 mode_at_start=0 place=-1309241 comp_counts=3 comp_tries=3 preload=0 side=1 max_offset=2000 speed=10000 accel=None settle=1 encoder=linear um_per_count=1.95312 camera={'ExposureTime': 100000.0, 'Gain': 4.99}
+# steps_per_count=6.2409 from_calibration=True y_node=12 z_node=13
+time_iso,sample,elapsed_s,place,counterBefore,rawBefore,dCountsBefore,dUmBefore,compTries,compSteps,offsetSteps,counterAfter,rawAfter,dCountsAfter,dUmAfter,y,z,photoBefore,photoAfter,note
+2026-10-22T11:03:15.960,0,0.0,-1309241,-1309241,-4226,0,0.0,0,0,0,-1309241,-4225,1,1.95,238611,106733,C:\localfiles\uc2-esp32\tools\PYTHON\encoder_test\encoder_test_data\encoder_thermal_drift_open_loop_x_20261022_110311_photos\before\0000_before_20261022_110316.png,C:\localfiles\uc2-esp32\tools\PYTHON\encoder_test\encoder_test_data\encoder_thermal_drift_open_loop_x_20261022_110311_photos\after\0000_after_20261022_110318.png,

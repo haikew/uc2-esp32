@@ -23,6 +23,8 @@ Every --interval seconds (default 10 min):
 So one run gives the drift without correction (before) and what the
 firmware's correction leaves of it (after).
 
+At the start the encoder is re-anchored to the step counter (OD 0x2045 = 2, no
+motion), so an old posErr is not "corrected" by the first hold.
 The place is the step position of X at the start. Sample 0 does the same as
 every other sample: its "after" encoder count is the reference, dCounts* are
 the raw count minus that, dUm* = dCounts * --um-per-count (1.95 um for the
@@ -45,9 +47,9 @@ Photos (Hikrobot camera, MVS SDK, client closed) go to
 about 30 MB each.
 
 Usage:
-    uv run tools/PYTHON/encoder_test/encoder_thermal_drift.py --photo-test --gain 23
-    uv run tools/PYTHON/encoder_test/encoder_thermal_drift.py --port COM7 --gain 23 --quick
-    uv run tools/PYTHON/encoder_test/encoder_thermal_drift.py --port COM7 --gain 23 --hours 6 --interval 300
+    uv run tools/PYTHON/encoder_test/encoder_thermal_drift.py --photo-test
+    uv run tools/PYTHON/encoder_test/encoder_thermal_drift.py --port COM7 --quick
+    uv run tools/PYTHON/encoder_test/encoder_thermal_drift.py --port COM7 --hours 6 --interval 300
 
 Output: one CSV row per sample, '#' lines are run metadata
 (pandas: read_csv(..., comment='#')).
@@ -72,11 +74,15 @@ FAULTS = {0: "NONE", 1: "STALL", 2: "LOST_STEPS", 3: "DIVERGENCE", 4: "TIMEOUT",
           5: "CAL_INVALID", 6: "CAL_FAILED", 7: "ENC_NOISE"}
 # stage travel per count of the linear encoder
 UM_PER_COUNT = 2000 / 1024
+# camera with the lamp on, as in encoder_backlash.py
+GAIN = 5.0          # dB
+EXPOSURE = 100000   # us
 
 # slave object dictionary (main/src/canopen/UC2_OD_Indices.h)
 OD_POSITION, OD_STATUS = 0x2001, 0x2004
 OD_MEASURED, OD_POS_ERR, OD_MODE, OD_HEALTH, OD_FAULT = 0x2040, 0x2041, 0x2042, 0x2043, 0x2044
 OD_CALIBRATED, OD_CPS_Q16, OD_BACKLASH, OD_RAW = 0x2046, 0x2049, 0x204A, 0x204B
+OD_RESET = 0x2045  # 1 = trust encoder, 2 = trust steps, 3 = force rehome
 
 
 def open_master(port, baud):
@@ -146,17 +152,18 @@ class Axis:
                                     "motor": {"steppers": [stepper]}}) + "\n").encode())
 
     def wait_quiet(self, settle, timeout):
-        """Wait until X has not been running and neither the step counter nor
-        the encoder has changed for `settle` s (the firmware's verify and
-        corrections come after the move itself). Returns the seconds it took."""
+        """Wait until X has not been running, its step counter has not changed
+        and the encoder has stayed within 1 count (a count on its edge may
+        flicker) for `settle` s (the firmware's verify and corrections come
+        after the move itself). Returns the seconds it took."""
         t0 = time.time()
         last, quiet_since = None, None
         while time.time() - t0 < timeout:
             time.sleep(0.2)
             pos, running = self.position()
-            now = (pos, self.sdo(OD_RAW))
-            if running or now != last:
-                last, quiet_since = now, None
+            raw = self.sdo(OD_RAW)
+            if running or last is None or pos != last[0] or abs(raw - last[1]) > 1:
+                last, quiet_since = (pos, raw), None
             else:
                 quiet_since = quiet_since or time.time()
                 if time.time() - quiet_since >= settle:
@@ -293,11 +300,9 @@ def main():
                          "(default: the linear encoder)")
     ap.add_argument("--quick", action="store_true",
                     help="rehearsal: the same sequence, but only 4 samples 20 s apart")
-    ap.add_argument("--gain", type=float, default=None,
-                    help="camera gain in dB (default: as set in the camera)")
-    ap.add_argument("--exposure", type=float, default=None,
-                    help="camera exposure time in microseconds (default: as set "
-                         "in the camera)")
+    ap.add_argument("--gain", type=float, default=GAIN, help="camera gain in dB")
+    ap.add_argument("--exposure", type=float, default=EXPOSURE,
+                    help="camera exposure time in microseconds")
     ap.add_argument("--photo-format", choices=("bmp", "png", "jpg", "tif"), default="png")
     ap.add_argument("--photo-test", action="store_true",
                     help="only take one photo and exit")
@@ -351,6 +356,15 @@ def main():
         if not calibrated:
             raise SystemExit("X is not calibrated: CORRECT would run open loop. Calibrate it "
                              "first (write 1 to OD 0x2048)")
+        # an old posErr (open-loop moves since the calibration) would be
+        # "corrected" by the first hold and move X away from the place: re-anchor
+        # the encoder to the step counter first (no motion), as
+        # ultra_test_can_linear.py does
+        print(f"posErr was {r['posErr']} steps: re-anchoring the encoder to the step counter")
+        axis.sdo(OD_RESET, 2, "u8")
+        time.sleep(1.0)
+        r = axis.reading()
+        print(f"now position = {r['counter']}, rawCounts = {r['raw']}, posErr = {r['posErr']}")
         place = r["counter"]
         if mode0 != 2:
             print(f"axismode {mode0} -> 2 (CORRECT), set back to {mode0} at the end")
