@@ -97,6 +97,10 @@ public:
     static RemoteSlaveState s_remoteSlaves[REMOTE_SLAVE_SLOTS];
 
 private:
+    // Bodies of get()/act(); the public wrappers echo the request qid.
+    static cJSON* getImpl(cJSON* doc);
+    static cJSON* actImpl(cJSON* doc);
+
     static void CAN_ctrl_task(void* arg);
     static void CO_main_task(void* arg);
     static void CO_tmr_task(void* arg);

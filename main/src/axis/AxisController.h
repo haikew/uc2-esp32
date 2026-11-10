@@ -25,6 +25,8 @@ namespace AxisController
     // Wire this into setup()/loop() next to the legacy encoder controller.
     void setup();
     void loop();
+    // True once setup() has loaded calibration and set the boot mode.
+    bool isReady();
 
     // ---- unified motion interface (ImSwitch-visible; unchanged semantics) ---
     // Runs in the axis's configured mode (OPEN_LOOP/MONITOR/CORRECT/SERVO).

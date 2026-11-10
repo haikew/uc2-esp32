@@ -715,6 +715,11 @@ namespace AxisController
         g_setupDone = true;
     }
 
+    bool isReady()
+    {
+        return g_setupDone;
+    }
+
     void loop()
     {
         if (!g_setupDone)

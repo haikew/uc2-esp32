@@ -726,8 +726,10 @@ bool CANopenModule::writeSDO(uint8_t nodeId, uint16_t index, uint8_t subIndex,
         // unchanged), the node is gone — mark it absent so the next command
         // fast-fails instead of stalling for the full timeout again. A protocol
         // abort (node answered) leaves liveness refreshed, so we keep it.
-        if (s_nodeLastSeenMs[nodeId] == seenBefore)
+        if (s_nodeLastSeenMs[nodeId] == seenBefore) {
             s_nodeLastSeenMs[nodeId] = 0;
+            log_w("writeSDO: node 0x%02X gave no answer, marked offline until it sends a frame", nodeId);
+        }
     }
     return (ret == CO_SDO_AB_NONE);
 }
@@ -743,8 +745,11 @@ bool CANopenModule::readSDO(uint8_t nodeId, uint16_t index, uint8_t subIndex,
         index, subIndex, buf, bufSize, readSize);
     if (s_sdoMutex) xSemaphoreGive(s_sdoMutex);
     // No response at all -> mark node absent so the next call fast-fails.
-    if (ret != CO_SDO_AB_NONE && s_nodeLastSeenMs[nodeId] == seenBefore)
+    if (ret != CO_SDO_AB_NONE && s_nodeLastSeenMs[nodeId] == seenBefore) {
         s_nodeLastSeenMs[nodeId] = 0;
+        log_w("readSDO: node 0x%02X idx=0x%04X sub=0x%02X gave no answer, marked offline until it sends a frame",
+              nodeId, index, subIndex);
+    }
     return (ret == CO_SDO_AB_NONE);
 }
 
@@ -1550,10 +1555,24 @@ void CANopenModule::CO_main_task(void* arg)
     vTaskDelete(NULL);
 }
 
+// Every /can_get and /can_act reply carries the request's qid, so the host can
+// match it to the command that is waiting for it.
+static cJSON* echoQid(cJSON* resp, cJSON* doc)
+{
+    if (!cJSON_IsObject(resp) || cJSON_GetObjectItem(resp, "qid")) return resp;
+    cJSON* qidItem = cJSON_GetObjectItem(doc, "qid");
+    cJSON_AddNumberToObject(resp, "qid",
+        (qidItem && cJSON_IsNumber(qidItem)) ? qidItem->valueint : 0);
+    return resp;
+}
+
+cJSON* CANopenModule::get(cJSON* doc) { return echoQid(getImpl(doc), doc); }
+cJSON* CANopenModule::act(cJSON* doc) { return echoQid(actImpl(doc), doc); }
+
 // ============================================================================
 // /can_get — returns node ID, NMT state, TWAI health
 // ============================================================================
-cJSON* CANopenModule::get(cJSON* /*doc*/)
+cJSON* CANopenModule::getImpl(cJSON* /*doc*/)
 {
     cJSON* resp = cJSON_CreateObject();
     cJSON_AddNumberToObject(resp, "nodeId", runtimeConfig.canNodeId);
@@ -1625,7 +1644,7 @@ static bool readNodeString(uint8_t nodeId, uint16_t index, char* out, size_t out
 //   {"task":"/can_act", "setRemoteNodeId": <newId>,        — reassign by MAC
 //                       "byMac": "AA:BB:CC:DD:EE:FF"}          (master finds it)
 // ============================================================================
-cJSON* CANopenModule::act(cJSON* doc)
+cJSON* CANopenModule::actImpl(cJSON* doc)
 {
     cJSON* resp = cJSON_CreateObject();
 
@@ -2117,7 +2136,11 @@ void CANopenModule::syncRpdoToModules_slave()
         // command in ANY slot and apply it to the ONE physical axis of this
         // node, then re-sync all slots so stale slots never re-trigger.
         int ax = (int)pinConfig.REMOTE_MOTOR_AXIS_ID;
-        if (ax >= 0 && ax < 4) {
+        // The CANopen tasks start before AxisController::setup(); seeding the OD
+        // earlier would copy the not-yet-set OPEN_LOOP and then force it back
+        // over the boot mode (MONITOR when calibrated). Host commands written
+        // meanwhile stay in the OD and are applied once ready.
+        if (ax >= 0 && ax < 4 && AxisController::isReady()) {
             uint8_t curMode = AxisController::getFeedback(ax).mode;
             // First pass after boot: seed the OD slots with the controller's
             // actual mode (MONITOR by default when calibrated). Without this,
